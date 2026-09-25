@@ -1,0 +1,1772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ET1240 BA Tracker</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<style>
+:root{
+  --paper:#F3F5F1; --surface:#FFFFFF; --ink:#16202A; --ink-2:#4B5663; --ink-3:#7A8490;
+  --line:#D9DED6; --line-2:#E9ECE6;
+  --teal:#1D6468; --teal-ink:#FFFFFF; --teal-soft:#E2EEEC;
+  --amber:#8A5700; --amber-bar:#C98A1B; --amber-soft:#FBEFD8;
+  --red:#A8261E; --red-soft:#F8E2DE;
+  --green:#2B6B43; --green-soft:#E0F0E4;
+  --muted-soft:#ECEEEA;
+  --font:"Instrument Sans","Segoe UI",system-ui,-apple-system,sans-serif;
+  --mono:"IBM Plex Mono",Consolas,ui-monospace,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --paper:#11171C; --surface:#182026; --ink:#E5EAE7; --ink-2:#B1BAC0; --ink-3:#85909A;
+    --line:#2D3940; --line-2:#222D34;
+    --teal:#72B9B5; --teal-ink:#0F1B1D; --teal-soft:#1B3234;
+    --amber:#E3AC4E; --amber-bar:#E3AC4E; --amber-soft:#3A2D15;
+    --red:#EF8B80; --red-soft:#3D221F;
+    --green:#7FC699; --green-soft:#1B3223;
+    --muted-soft:#232C33;
+    color-scheme:dark;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--font);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+[hidden]{display:none!important}
+
+/* Shell */
+.shell{display:grid;grid-template-columns:248px minmax(0,1fr);min-height:100vh}
+.sidebar{position:sticky;top:0;height:100vh;overflow-y:auto;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:20px 14px 16px}
+.brand{display:flex;gap:12px;align-items:center;padding:0 6px 18px;border-bottom:1px solid var(--line-2);margin-bottom:10px}
+.rosette{width:42px;height:42px;color:var(--teal);flex:none}
+.brand strong{display:block;font-size:19px;line-height:1.15;letter-spacing:-.015em}
+.brand span{display:block;font-size:13px;color:var(--ink-2)}
+.nav-group{font-size:12.5px;color:var(--ink-3);padding:16px 10px 6px;font-weight:600}
+.nav-item{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;margin:1px 0;border-radius:6px;border:0;background:none;font-size:14.5px;font-weight:500;color:var(--ink-2);cursor:pointer;text-align:left}
+.nav-item svg{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.nav-item:hover{background:var(--paper);color:var(--ink)}
+.nav-item.active{background:var(--teal-soft);color:var(--teal);font-weight:600}
+.count{margin-left:auto;font-size:12px;font-weight:600;min-width:22px;padding:1px 7px;border-radius:999px;background:var(--muted-soft);color:var(--ink-2);text-align:center}
+.nav-item.active .count{background:var(--surface);color:var(--teal)}
+.side-foot{margin-top:auto;border-top:1px solid var(--line-2);padding:14px 6px 0;display:flex;flex-direction:column;gap:8px}
+.who{font-size:13px;color:var(--ink-2);word-break:break-all}
+.main{min-width:0;display:flex;flex-direction:column}
+.topbar{position:relative;background:var(--surface);border-bottom:1px solid var(--line);overflow:hidden}
+.guilloche{position:absolute;inset:0;width:100%;height:100%;color:var(--teal);opacity:.28;pointer-events:none;animation:fadein 1.4s ease-out both}
+@keyframes fadein{from{opacity:0}to{opacity:.28}}
+.topbar-inner{position:relative;display:flex;justify-content:space-between;align-items:center;gap:12px 20px;padding:24px 32px;flex-wrap:wrap}
+.topbar h1{margin:0;font-size:27px;line-height:1.15;letter-spacing:-.02em}
+.topbar p{margin:3px 0 0;color:var(--ink-2);font-size:14px}
+.top-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.sync{display:inline-flex;align-items:center;gap:8px;font-size:13.5px;color:var(--ink-2);max-width:46ch}
+.sync::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--green);flex:none}
+.sync.busy::before{background:var(--teal)}
+.sync.bad{color:var(--red)}
+.sync.bad::before{background:var(--red)}
+.banner{margin:16px 32px 0;padding:10px 14px;border-radius:8px;background:var(--amber-soft);color:var(--amber);font-size:14px}
+#content{padding:24px 32px 64px;width:100%;max-width:1520px}
+
+/* Buttons & inputs */
+.btn{appearance:none;border:1px solid var(--line);background:var(--surface);padding:7px 13px;border-radius:6px;font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap;line-height:1.3}
+.btn:hover{border-color:var(--ink-3)}
+.btn.primary{background:var(--teal);border-color:var(--teal);color:var(--teal-ink);font-weight:600}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.danger{color:var(--red);margin-left:auto}
+.btn.ghost{border-color:transparent;background:none;color:var(--ink-2)}
+.btn.ghost:hover{color:var(--ink);border-color:var(--line)}
+.btn.sm{padding:4px 9px;font-size:13px}
+.btn.block{width:100%;text-align:left}
+.btn:disabled{opacity:.45;cursor:default}
+.icon-btn{appearance:none;border:0;background:none;font-size:24px;line-height:1;padding:4px 8px;border-radius:6px;cursor:pointer;color:var(--ink-2)}
+.icon-btn:hover{background:var(--muted-soft);color:var(--ink)}
+.link{appearance:none;border:0;background:none;color:var(--teal);font-size:13px;font-weight:600;cursor:pointer;padding:2px 4px}
+.link:hover{text-decoration:underline}
+.inp{padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:14px;min-width:0}
+
+/* Dashboard */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:16px}
+.kpi{appearance:none;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 18px 15px;cursor:pointer;display:flex;flex-direction:column;gap:3px;text-align:left}
+.kpi:hover{border-color:var(--teal)}
+.kpi-label{font-size:13.5px;color:var(--ink-2);font-weight:500}
+.kpi-value{font-size:36px;font-weight:700;letter-spacing:-.025em;line-height:1.1;font-variant-numeric:tabular-nums}
+.kpi-value small{font-size:17px;color:var(--ink-3);font-weight:600;letter-spacing:0}
+.kpi-sub{font-size:13px;color:var(--ink-3)}
+.kpi.alert .kpi-value{color:var(--red)}
+.kpi .bar{margin-top:6px;max-width:none}
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:14px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;display:flex;flex-direction:column;min-width:0}
+.panel>header{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 18px 8px}
+.panel h3{margin:0;font-size:15.5px;letter-spacing:-.005em}
+.panel-body{padding:4px 18px 16px;flex:1}
+.span-3{grid-column:span 3}.span-4{grid-column:span 4}.span-5{grid-column:span 5}.span-6{grid-column:span 6}.span-7{grid-column:span 7}.span-8{grid-column:span 8}.span-12{grid-column:span 12}
+@media (max-width:1180px){.span-3,.span-4,.span-5,.span-7,.span-8{grid-column:span 6}}
+@media (max-width:780px){.grid>*{grid-column:1/-1!important}}
+.hbar{appearance:none;display:grid;grid-template-columns:minmax(96px,46%) 1fr 34px;align-items:center;gap:10px;padding:5px 0;font-size:13.5px;cursor:pointer;border:0;background:none;width:100%;text-align:left}
+.hbar:hover .lbl{color:var(--teal)}
+.hbar .lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.track{height:10px;background:var(--muted-soft);border-radius:5px;overflow:hidden;display:block}
+.fill{display:block;height:100%;border-radius:5px}
+.fill-bad{background:var(--red)}.fill-warn{background:var(--amber-bar)}.fill-info{background:var(--teal)}.fill-ok{background:var(--green)}.fill-muted{background:var(--ink-3)}
+.n{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.stack{display:flex;height:10px;border-radius:5px;overflow:hidden}
+.seg-cr{background:var(--teal)}.seg-req{background:var(--amber-bar)}
+.legend{display:flex;gap:14px;font-size:12.5px;color:var(--ink-2)}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.chart{padding-top:6px}
+.plot{position:relative;height:140px;display:grid;grid-template-columns:repeat(7,1fr);gap:10px;align-items:end;border-bottom:1px solid var(--line)}
+.plot button{appearance:none;border:0;background:none;padding:0;height:100%;display:flex;align-items:flex-end;justify-content:center;cursor:pointer}
+.stick{display:block;width:100%;max-width:38px;background:var(--teal);border-radius:4px 4px 0 0;min-height:2px}
+.plot button.off .stick{background:var(--line)}
+.plot button:hover .stick{filter:brightness(1.15)}
+.target{position:absolute;left:0;right:0;border-top:1.5px dashed var(--amber-bar);pointer-events:none}
+.target span{position:absolute;right:0;top:-18px;font-size:11.5px;color:var(--amber);background:var(--surface);padding:0 4px}
+.xlabels{display:grid;grid-template-columns:repeat(7,1fr);gap:10px;margin-top:6px;text-align:center;font-size:12.5px;color:var(--ink-2)}
+.xlabels b{display:block;color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.xlabels .today{color:var(--teal);font-weight:600}
+.items{list-style:none;margin:0;padding:0}
+.item{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 12px;align-items:center;padding:9px 0;border-top:1px solid var(--line-2);cursor:pointer}
+.item:first-child{border-top:0}
+.item:hover .t{color:var(--teal)}
+.item .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
+.item .m{grid-column:2/4;font-size:12.5px;color:var(--ink-3);margin-top:-4px}
+.mini-empty{color:var(--ink-3);font-size:14px;padding:14px 0}
+
+/* Registers */
+.toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px;flex-wrap:wrap}
+.filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.filters input[type=search]{width:250px;max-width:100%}
+.check{display:inline-flex;align-items:center;gap:6px;font-size:14px;color:var(--ink-2);margin-left:4px;cursor:pointer}
+.check input{accent-color:var(--teal);width:16px;height:16px}
+.strip{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-bottom:14px}
+.nav3{display:flex;align-items:center;gap:6px}
+.nav3 strong{min-width:170px;text-align:center;font-size:15px}
+.arrow{font-size:18px;padding:2px 10px}
+.progress{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--ink-2);flex:1;min-width:200px}
+.bar{flex:1;max-width:220px;height:6px;border-radius:3px;background:var(--muted-soft);overflow:hidden;display:block}
+.bar i{display:block;height:100%;background:var(--green);border-radius:3px}
+.table-wrap{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;font-weight:600;color:var(--ink-2);font-size:13px;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap;cursor:pointer;user-select:none}
+th:hover{color:var(--ink)}
+th.static{cursor:default}
+th .dir{color:var(--teal);margin-left:4px}
+td{padding:10px 12px;border-bottom:1px solid var(--line-2);vertical-align:top}
+tbody tr:last-child td{border-bottom:0}
+tfoot td{border-top:1px solid var(--line);border-bottom:0;font-weight:600}
+tr.row{cursor:pointer}
+tr.row:hover td{background:var(--paper)}
+tr.row:focus-visible{outline:2px solid var(--teal);outline-offset:-2px}
+.ref{font-family:var(--mono);font-size:13px;color:var(--teal);white-space:nowrap}
+.title{font-weight:500;min-width:220px}
+.clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-width:44ch}
+.nowrap{white-space:nowrap}
+.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.sub{display:block;font-size:12.5px;color:var(--ink-3);margin-top:2px}
+.pagelink{display:inline-block;font-size:12.5px;color:var(--teal);margin-top:2px}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12.5px;font-weight:600;white-space:nowrap}
+.tone-bad{background:var(--red-soft);color:var(--red)}
+.tone-warn{background:var(--amber-soft);color:var(--amber)}
+.tone-info{background:var(--teal-soft);color:var(--teal)}
+.tone-ok{background:var(--green-soft);color:var(--green)}
+.tone-muted{background:var(--muted-soft);color:var(--ink-2)}
+.prio{white-space:nowrap}
+.prio::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:1px;background:var(--line)}
+.prio.p-high::before,.prio.p-must::before{background:var(--red)}
+.prio.p-medium::before,.prio.p-should::before{background:var(--amber-bar)}
+.prio.p-low::before,.prio.p-could::before{background:var(--ink-3)}
+.actions-cell{white-space:nowrap}
+.actions-cell .btn+.btn{margin-left:4px}
+.muted{color:var(--ink-3)}
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:40px 24px;text-align:center}
+.empty h3{margin:0 0 6px;font-size:17px}
+.empty p{margin:0 auto 16px;color:var(--ink-2);max-width:52ch}
+
+/* Daily log */
+.days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;flex:1;min-width:320px}
+.day{appearance:none;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 4px;cursor:pointer;text-align:center;font-size:12.5px;color:var(--ink-2);line-height:1.3}
+.day b{display:block;font-size:14px;color:var(--ink)}
+.day i{display:block;font-style:normal;font-variant-numeric:tabular-nums;color:var(--ink-3)}
+.day.has i{color:var(--teal);font-weight:600}
+.day.active{border-color:var(--teal);background:var(--teal-soft);color:var(--teal)}
+.day.active b{color:var(--teal)}
+.quick{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
+.quick h3{margin:0 0 10px;font-size:15px}
+.quick-grid{display:grid;grid-template-columns:minmax(220px,2.6fr) minmax(130px,1.2fr) minmax(130px,1.2fr) minmax(120px,1fr) 80px auto;gap:8px;align-items:end}
+.quick-grid label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-2);margin-bottom:4px}
+.quick-grid .inp{width:100%}
+@media (max-width:980px){.quick-grid{grid-template-columns:1fr 1fr}.quick-grid .wide{grid-column:1/-1}}
+
+/* Weekly report */
+.report-layout{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;align-items:start}
+@media (max-width:1100px){.report-layout{grid-template-columns:1fr}}
+.doc{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:28px 34px 34px;max-width:860px}
+.doc h2{margin:0;font-size:24px;letter-spacing:-.015em}
+.doc .doc-meta{margin:4px 0 18px;color:var(--ink-2);font-size:14px}
+.doc h4{margin:22px 0 8px;font-size:15px;color:var(--teal);border-bottom:1px solid var(--line-2);padding-bottom:4px}
+.doc p{margin:6px 0;max-width:72ch}
+.doc ul{margin:4px 0 8px;padding-left:20px}
+.doc li{margin:3px 0}
+.doc .day-h{margin:12px 0 2px;font-weight:600}
+.doc table{width:auto;min-width:320px;font-size:14px}
+.doc td,.doc th{padding:5px 12px 5px 0;border-bottom:1px solid var(--line-2);cursor:default}
+.doc .placeholder{color:var(--ink-3);font-style:italic}
+.notes{position:sticky;top:16px}
+.notes .panel-body{display:flex;flex-direction:column;gap:12px}
+.notes label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bottom:5px}
+.notes textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:14px;resize:vertical;line-height:1.45}
+.notes .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.unsaved{font-size:13px;color:var(--amber)}
+
+/* Drawer */
+.scrim{position:fixed;inset:0;background:rgba(8,14,18,.38);opacity:0;pointer-events:none;transition:opacity .2s;z-index:10}
+.scrim.open{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(620px,100%);background:var(--surface);border-left:1px solid var(--line);transform:translateX(100%);transition:transform .22s ease;display:flex;flex-direction:column;z-index:11;visibility:hidden}
+.drawer.open{transform:none;visibility:visible}
+.drawer>header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:18px 22px 14px;border-bottom:1px solid var(--line)}
+.drawer h3{margin:0;font-size:19px;letter-spacing:-.01em}
+.drawer h3.ref{font-size:17px}
+.drawer .meta{margin:2px 0 0;font-size:13px;color:var(--ink-3)}
+.drawer .body{flex:1;overflow:auto;padding:18px 22px 24px}
+.drawer>footer{display:flex;gap:8px;padding:14px 22px;border-top:1px solid var(--line)}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 16px}
+.field.full{grid-column:1/-1}
+.field label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bottom:5px}
+.field label .req{color:var(--red);margin-left:2px}
+.field input,.field select,.field textarea{width:100%;font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+.field textarea{resize:vertical;min-height:70px;line-height:1.45}
+.field input.mono{font-family:var(--mono);font-size:13.5px}
+.field input[readonly],.field :disabled{background:var(--paper);color:var(--ink-2)}
+.hint{display:block;font-size:12.5px;color:var(--ink-3);margin-top:4px}
+.form-error{color:var(--red);font-size:14px;margin:14px 0 0;min-height:1em}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;padding:3px;gap:2px;margin-bottom:16px;flex-wrap:wrap}
+.seg button{appearance:none;border:0;background:none;padding:6px 12px;border-radius:6px;font-size:14px;font-weight:500;color:var(--ink-2);cursor:pointer}
+.seg button.on{background:var(--teal-soft);color:var(--teal);font-weight:600}
+.st-row{display:grid;grid-template-columns:24px minmax(0,1fr) 130px 104px 34px;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line-2)}
+.st-row input,.st-row select{padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:14px;width:100%;min-width:0}
+.st-move{display:flex;flex-direction:column}
+.st-move button{appearance:none;border:0;background:none;padding:0 6px;font-size:12px;line-height:1.2;cursor:pointer;color:var(--ink-3)}
+.st-move button:hover{color:var(--ink)}
+.st-use{font-size:12px;color:var(--ink-3);white-space:nowrap}
+.st-head{display:grid;grid-template-columns:24px minmax(0,1fr) 130px 104px 34px;gap:8px;font-size:12.5px;font-weight:600;color:var(--ink-3);padding-bottom:4px;border-bottom:1px solid var(--line)}
+.st-col{display:flex;align-items:center;gap:6px}.st-col .sw{flex:none;margin:0;border-radius:50%;width:11px;height:11px}
+
+.loading{display:flex;align-items:center;gap:12px;color:var(--ink-2);padding:60px 0;justify-content:center}
+.spin{width:18px;height:18px;border:2px solid var(--line);border-top-color:var(--teal);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,16px);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:8px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:30;max-width:min(560px,calc(100% - 32px))}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* Connect screens */
+body.gate .sidebar,body.gate .top-actions{display:none!important}
+body.gate .shell{grid-template-columns:1fr}
+.connect{max-width:560px;margin:40px auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:28px 30px}
+.connect h2{margin:0 0 8px;font-size:22px;letter-spacing:-.015em}
+.connect p{color:var(--ink-2);margin:0 0 12px}
+.connect .row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.connect .lbl{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-top:6px}
+.connect .err{color:var(--red);font-size:14px;margin:14px 0 0}
+.connect code{font-family:var(--mono);font-size:13px;background:var(--muted-soft);padding:1px 5px;border-radius:4px}
+#sheetName{display:block;font-size:12.5px;color:var(--ink-3);margin:2px 0 4px}
+
+@media (max-width:900px){
+  .side-foot .opt{display:none}
+  .shell{grid-template-columns:1fr}
+  .sidebar{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px;padding:12px 14px}
+  .brand{border:0;margin:0;padding:0 8px 0 0}
+  #nav{display:flex;overflow-x:auto;gap:2px;width:100%;order:3}
+  .nav-group{display:none}
+  .nav-item{width:auto;white-space:nowrap}
+  .side-foot{margin:0 0 0 auto;border:0;padding:0;flex-direction:row;align-items:center}
+  .who{display:none}
+  .topbar-inner,#content{padding-left:16px;padding-right:16px}
+  .banner{margin-left:16px;margin-right:16px}
+  .form-grid{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+@media print{
+  body{background:#fff}
+  .sidebar,.topbar,.banner,.notes,.strip,.kpis,.toast,.drawer,.scrim{display:none!important}
+  .shell{display:block}
+  #content{padding:0}
+  .report-layout{display:block}
+  .doc{border:0;padding:0;max-width:none}
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <svg class="rosette" viewBox="-24 -24 48 48" aria-hidden="true"></svg>
+      <div><strong>BA tracker</strong><span id="projName"></span></div>
+    </div>
+    <nav id="nav" aria-label="Sections"></nav>
+    <div class="side-foot">
+      <div class="who"><span id="userEmail"></span><span id="sheetName"></span><span id="access" class="pill tone-muted"></span></div>
+      <button class="btn ghost block" data-act="settings" id="settingsBtn" hidden>Settings</button>
+      <button class="btn ghost block opt" data-act="copy-link" id="copyLinkBtn" hidden>Copy link for your team</button>
+      <button class="btn ghost block opt" data-act="switch-sheet" id="switchBtn" hidden>Switch sheet</button>
+      <button class="btn ghost block opt" data-act="sign-out" id="signOutBtn" hidden>Sign out</button>
+    </div>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <svg class="guilloche" viewBox="0 0 1200 140" preserveAspectRatio="none" aria-hidden="true"></svg>
+      <div class="topbar-inner">
+        <div><h1 id="viewTitle">Dashboard</h1><p id="viewSub"></p></div>
+        <div class="top-actions"><span class="sync" id="sync" role="status"></span><button class="btn" data-act="refresh">Refresh</button></div>
+      </div>
+    </header>
+    <div id="banner"></div>
+    <main id="content"><div class="loading"><span class="spin"></span>Loading the tracker</div></main>
+  </div>
+</div>
+<div class="scrim" id="scrim" data-act="close"></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="Edit"></aside>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ================= Your settings =================
+   CLIENT_ID: the OAuth client ID from Google Cloud (ends in .apps.googleusercontent.com).
+   SHEET_URL: optional. The tracker sheet link, so nobody has to paste it. */
+const CONFIG = {
+  CLIENT_ID: '673710254879-a8n9gqctgj3ojeuathhh7ok3fj65cepk.apps.googleusercontent.com',
+  SHEET_URL: 'https://docs.google.com/spreadsheets/d/1M66cQlFwvCtYzOQUUbx64VbEEDq48NL6CaYIv_jFS8k/edit?usp=sharing'
+};
+
+(function(){
+'use strict';
+
+/* ================= Schema ================= */
+const REG_LABEL = {cr:'Change requests', req:'Requirements', task:'Weekly tasks'};
+const TONES = {Red:'bad', Amber:'warn', Teal:'info', Green:'ok', Grey:'muted'};
+const TYPES = ['Open','Done','Closed'];
+const PAGE_STATUSES = ['Needs update','Check overdue','Never checked','Check due soon','Current'];
+const SCHEMA = {
+  cr:{ tab:'Change requests', one:'change request', id:'CR Ref', intro:'Change requests on hold or waiting for an implementation slot.',
+    empty:['No change requests yet','Add a change request that is waiting on a decision, feasibility review or release slot.'],
+    fields:[
+      {k:'CR Ref',t:'id',list:1},
+      {k:'Title',t:'text',req:1,list:1,full:1,title:1},
+      {k:'Module',t:'module',list:1},
+      {k:'Status',t:'status',list:1},
+      {k:'Priority',t:'select',opts:['High','Medium','Low'],def:'Medium',list:1},
+      {k:'Date Raised',t:'date',def:'today',list:1},
+      {k:'Raised By',t:'text'},
+      {k:'Target Release',t:'text'},
+      {k:'Description',t:'area',full:1},
+      {k:'Reason on Hold',t:'area',full:1,list:1},
+      {k:'Dependency / Blocker',t:'text',full:1},
+      {k:'Linked Requirement',t:'text',ph:'e.g. ET1240-REQ-004'},
+      {k:'Confluence Page',t:'text',ph:'Page ref or link'},
+      {k:'Notes',t:'area',full:1}
+    ]},
+  req:{ tab:'Requirements', one:'requirement', id:'Ref No', intro:'Requirements still waiting for analysis, confirmation or sign-off.',
+    empty:['No requirements yet','Each requirement you add gets the next reference number automatically.'],
+    fields:[
+      {k:'Ref No',t:'id',list:1},
+      {k:'Title',t:'text',req:1,list:1,full:1,title:1},
+      {k:'Module',t:'module',list:1},
+      {k:'Type',t:'select',opts:['Functional','Non-functional','Integration','Reporting','Data / migration'],def:'Functional'},
+      {k:'Status',t:'status',list:1},
+      {k:'Priority',t:'select',opts:['Must','Should','Could',"Won't"],def:'Must',list:1},
+      {k:'Owner',t:'text',list:1},
+      {k:'Stakeholder',t:'text',ph:'Who needs to confirm'},
+      {k:'Date Raised',t:'date',def:'today'},
+      {k:'Due Date',t:'date',list:1},
+      {k:'Description',t:'area',full:1,rows:4},
+      {k:'Business Rules',t:'area',full:1},
+      {k:'Acceptance Criteria',t:'area',full:1},
+      {k:'Open Questions',t:'area',full:1},
+      {k:'Source Document',t:'text',ph:'e.g. FRS v1.2, section 4.3'},
+      {k:'Linked CR',t:'text',ph:'e.g. CR-03'},
+      {k:'Confluence Page',t:'text',full:1,ph:'Page ref or link'},
+      {k:'Notes',t:'area',full:1}
+    ]},
+  task:{ tab:'Weekly tasks', one:'task', id:'Task ID', intro:'What the team is working on, week by week.',
+    empty:['No tasks for this week','Add this week\u2019s tasks, then carry anything unfinished into next week.'],
+    fields:[
+      {k:'Task ID',t:'id',list:1},
+      {k:'Task',t:'text',req:1,list:1,full:1,title:1},
+      {k:'Week Commencing',t:'week',def:'week'},
+      {k:'Due Date',t:'date',list:1},
+      {k:'Owner',t:'text',def:'me',list:1},
+      {k:'Module',t:'module',list:1},
+      {k:'Category',t:'list',listKey:'Task categories',list:1},
+      {k:'Status',t:'status',list:1},
+      {k:'Priority',t:'select',opts:['High','Medium','Low'],def:'Medium',list:1},
+      {k:'Linked Ref',t:'ref',ph:'e.g. ET1240-REQ-004 or CR-02'},
+      {k:'Carried From',t:'text',ro:1},
+      {k:'Notes',t:'area',full:1}
+    ]},
+  page:{ tab:'Confluence pages', one:'page', id:'Page Ref', intro:'Pages you maintain, and when each is next due for a check.',
+    empty:['No Confluence pages tracked yet','Add the pages you maintain and how often each should be checked.'],
+    fields:[
+      {k:'Page Ref',t:'id',list:1},
+      {k:'Page Title',t:'text',req:1,list:1,full:1,title:1},
+      {k:'URL',t:'url',full:1,ph:'https://'},
+      {k:'Module',t:'module',list:1},
+      {k:'Owner',t:'text',list:1},
+      {k:'Review Every (days)',t:'number',def:'7'},
+      {k:'Needs Update',t:'select',opts:['No','Yes'],def:'No'},
+      {k:'Last Checked On',t:'date',list:1},
+      {k:'Page Updated On',t:'date',list:1},
+      {k:'What Needs Changing',t:'area',full:1},
+      {k:'Linked Refs',t:'text',full:1,ph:'Requirements, CRs or tasks this page documents'},
+      {k:'Notes',t:'area',full:1}
+    ]},
+  log:{ tab:'Daily log', one:'log entry', id:'Log ID', intro:'',
+    fields:[
+      {k:'Log ID',t:'id'},
+      {k:'Activity',t:'text',req:1,full:1,title:1},
+      {k:'Date',t:'date',def:'day'},
+      {k:'Hours',t:'number',step:'0.25'},
+      {k:'Module',t:'module'},
+      {k:'Category',t:'list',listKey:'Daily log categories'},
+      {k:'Linked Ref',t:'ref',full:1},
+      {k:'Outcome',t:'area',full:1},
+      {k:'Blockers',t:'area',full:1},
+      {k:'Logged By',t:'text',ro:1}
+    ]}
+};
+const NAV = [
+  {v:'dash',label:'Dashboard',icon:'<rect x="3" y="3" width="6" height="7" rx="1"/><rect x="11" y="3" width="6" height="4" rx="1"/><rect x="3" y="12" width="6" height="5" rx="1"/><rect x="11" y="9" width="6" height="8" rx="1"/>'},
+  {v:'log',label:'Daily log',icon:'<rect x="3" y="4" width="14" height="13" rx="1.5"/><path d="M3 8h14M7 2.5v3M13 2.5v3M7 11.5h3"/>'},
+  {v:'report',label:'Weekly report',icon:'<path d="M5 2.5h7l3 3v12H5z"/><path d="M8 9h5M8 12h5M8 15h3"/>'},
+  {group:'Registers'},
+  {v:'cr',label:'Change requests',icon:'<circle cx="10" cy="10" r="7"/><path d="M8.2 7.2v5.6M11.8 7.2v5.6"/>'},
+  {v:'req',label:'Requirements',icon:'<path d="M8 5.5h9M8 10h9M8 14.5h9"/><path d="M3.5 5.5h1M3.5 10h1M3.5 14.5h1"/>'},
+  {v:'task',label:'Weekly tasks',icon:'<rect x="3" y="3" width="14" height="14" rx="2"/><path d="M6.5 10.2l2.4 2.4 4.6-5"/>'},
+  {v:'page',label:'Confluence pages',icon:'<path d="M4 3.5h9a2 2 0 0 1 2 2v11H6a2 2 0 0 1-2-2z"/><path d="M4 14.5a2 2 0 0 1 2-2h9"/>'}
+];
+
+/* ================= State ================= */
+let uidSeq=1; const nextUid=()=>uidSeq++;
+const state={
+  user:{email:'',canEdit:false}, settings:{}, statuses:{cr:[],req:[],task:[]},
+  data:{cr:[],req:[],task:[],page:[],log:[]}, reports:[],
+  view:'dash', loading:true, loadError:'',
+  sync:{busy:0,error:'',last:null},
+  filters:{
+    cr:{q:'',module:'',status:'',showClosed:false,sort:null},
+    req:{q:'',module:'',status:'',showClosed:false,sort:null},
+    task:{q:'',module:'',status:'',showClosed:true,sort:null},
+    page:{q:'',module:'',status:'',showClosed:true,sort:null}
+  },
+  week:null, day:null, reportWeek:null, person:null,
+  reportDraft:null, editing:null
+};
+
+/* ================= Helpers ================= */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad2=n=>String(n).padStart(2,'0');
+const iso=d=>d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());
+const today=()=>iso(new Date());
+function parseISO(s){ const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(s||'').trim()); return m?new Date(+m[1],+m[2]-1,+m[3]):null; }
+function mondayOf(d){ const x=new Date(d.getFullYear(),d.getMonth(),d.getDate()); x.setDate(x.getDate()-((x.getDay()+6)%7)); return x; }
+function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+const addISO=(s,n)=>iso(addDays(parseISO(s),n));
+const thisWeek=()=>iso(mondayOf(new Date()));
+const weekOf=s=>iso(mondayOf(parseISO(s)));
+const inWeek=(d,w)=>!!parseISO(d) && d.slice(0,10)>=w && d.slice(0,10)<=addISO(w,6);
+function fmtDate(s,opt){ const d=parseISO(s); if(!d) return s||''; const o=opt==='short'?{day:'numeric',month:'short'}:opt==='day'?{weekday:'long',day:'numeric',month:'short'}:opt==='long'?{weekday:'long',day:'numeric',month:'long',year:'numeric'}:{day:'numeric',month:'short',year:'numeric'}; return d.toLocaleDateString('en-GB',o); }
+const num=(v,d)=>{ const n=parseFloat(v); return isNaN(n)?d:n; };
+const fmtH=h=>(Math.round(h*100)/100)+'h';
+const listOf=key=>String(state.settings[key]||'').split(/[;\n]/).map(s=>s.trim()).filter(Boolean);
+const shortName=e=>String(e||'').split('@')[0];
+const sameUser=(a,b)=>String(a||'').trim().toLowerCase()===String(b||'').trim().toLowerCase();
+const can=()=>state.user.canEdit;
+function moduleOptions(){ const s=new Set(listOf('Modules')); for(const k in state.data) state.data[k].forEach(r=>{ if(r.Module) s.add(r.Module); }); return [...s]; }
+function statusMeta(k,name){
+  const s=(state.statuses[k]||[]).find(x=>x.status===name);
+  return s?{tone:TONES[s.colour]||'muted',type:s.type||'Open'}:{tone:'muted',type:'Open'};
+}
+const isClosed=(k,r)=>REG_LABEL[k]?statusMeta(k,r.Status).type!=='Open':false;
+const isDone=(k,r)=>REG_LABEL[k]?statusMeta(k,r.Status).type==='Done':false;
+const titleOf=(k,r)=>{ const f=SCHEMA[k].fields.find(f=>f.title); return r[f.k]||''; };
+function pageStatus(r){
+  if(String(r['Needs Update']||'').toLowerCase()==='yes') return {label:'Needs update',rank:0,tone:'bad'};
+  const last=parseISO(r['Last Checked On']);
+  if(!last) return {label:'Never checked',rank:2,tone:'warn'};
+  const due=addDays(last,Math.max(1,parseInt(r['Review Every (days)'],10)||7));
+  const diff=Math.round((due-parseISO(today()))/864e5);
+  const w=num(state.settings['Due soon window (days)'],2);
+  if(diff<0) return {label:'Check overdue',rank:1,due,diff,tone:'bad'};
+  if(diff<=w) return {label:'Check due soon',rank:3,due,diff,tone:'warn'};
+  return {label:'Current',rank:4,due,diff,tone:'ok'};
+}
+function dueLabel(d){
+  const diff=Math.round((parseISO(d)-parseISO(today()))/864e5);
+  if(diff<0) return {text:`${-diff} day${diff===-1?'':'s'} overdue`,tone:'bad'};
+  if(diff===0) return {text:'Due today',tone:'warn'};
+  if(diff===1) return {text:'Due tomorrow',tone:'warn'};
+  return {text:fmtDate(d,'short'),tone:'muted'};
+}
+function whenText(stamp){
+  const d=String(stamp||'').slice(0,10), t=String(stamp||'').slice(11,16);
+  if(d===today()) return 'today at '+t;
+  if(d===addISO(today(),-1)) return 'yesterday at '+t;
+  return fmtDate(d,'short')+(t?' at '+t:'');
+}
+function errMsg(e){ return String((e&&e.message)||e||'Something went wrong').replace(/^(ScriptError|Exception|Error):\s*/i,'').replace(/^CONFLICT\|/,''); }
+let toastTimer;
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),3600); }
+function personMatch(r,field){ return state.person==='all' || !state.person || sameUser(r[field],state.person); }
+function logsFor(pred){ return state.data.log.filter(r=>pred(r) && personMatch(r,'Logged By')); }
+const sumH=rows=>rows.reduce((a,r)=>a+num(r.Hours,0),0);
+
+/* ================= Backend ================= */
+function api(fn,...args){
+  const clone=JSON.parse(JSON.stringify(args));
+  if(state.mode==='preview') return new Promise((res,rej)=>setTimeout(()=>{ try{ res(JSON.parse(JSON.stringify(Mock[fn](...clone)))); }catch(e){ rej(e); } },160));
+  return SheetsAPI[fn](...clone).catch(e=>{
+    if(e.code==='SIGNIN'){ state.needSignin=true; renderTop(); throw Object.assign(new Error('Your Google sign-in has expired. Sign in again to continue.'),{code:'SIGNIN'}); }
+    const write=fn!=='getAll';
+    if(write&&e.status===403){ G.canEdit=false; state.user.canEdit=false; setTimeout(renderAll,0); }
+    throw friendly(e,write);
+  });
+}
+let slowTimer;
+async function load(silent){
+  if(!silent){ state.loading=true; state.loadError=''; renderContent();
+    clearTimeout(slowTimer); slowTimer=setTimeout(()=>{ const l=$('#content .loading'); if(l) l.innerHTML='<span class="spin"></span>Still loading from Google Sheets\u2026'; },4000); }
+  try{ applyAll(await api('getAll')); state.loadError=''; state.sync.error=''; state.sync.last=new Date(); state.loadedOnce=true; }
+  catch(e){
+    clearTimeout(slowTimer); state.loading=false;
+    if(e.code==='SIGNIN'&&!state.loadedOnce){ gate('signin'); return; }
+    if(!state.loadedOnce&&state.mode==='sheets'&&(e.status===403||e.status===404)){ gate('pick',errMsg(e)); return; }
+    if(silent) state.sync.error='Could not refresh: '+errMsg(e); else state.loadError=errMsg(e);
+  }
+  clearTimeout(slowTimer); state.loading=false; renderAll();
+}
+function applyAll(res){
+  state.user=res.user||{email:'',canEdit:false};
+  state.settings=res.settings||{};
+  state.sheetTitle=res.sheetTitle||'';
+  state.statuses={cr:[],req:[],task:[]};
+  (res.statuses||[]).forEach(s=>{ const k=Object.keys(REG_LABEL).find(k=>REG_LABEL[k]===s.register); if(k) state.statuses[k].push({status:s.status,colour:s.colour||'Grey',type:TYPES.includes(s.type)?s.type:'Open'}); });
+  for(const k of Object.keys(SCHEMA)) state.data[k]=((res.data||{})[k]||[]).map(r=>({...r,_uid:nextUid()}));
+  state.reports=res.reports||[];
+  if(state.person==null) state.person=state.user.email||'all';
+}
+async function persist(k,rec,opts){
+  state.sync.busy++; renderSync();
+  try{
+    const clean={}; Object.keys(rec).forEach(h=>{ if(h!=='_uid') clean[h]=rec[h]==null?'':String(rec[h]); });
+    const saved=await api('saveRecord',k,clean,opts||{});
+    const i=rec._uid!=null?state.data[k].findIndex(r=>r._uid===rec._uid):-1;
+    const out={...saved,_uid:i>=0?state.data[k][i]._uid:nextUid()};
+    if(i>=0) state.data[k][i]=out; else state.data[k].push(out);
+    state.sync.error=''; state.sync.last=new Date();
+    return out;
+  }catch(e){ state.sync.error=errMsg(e); throw e; }
+  finally{ state.sync.busy--; renderSync(); }
+}
+async function guarded(fn){
+  state.sync.busy++; renderSync();
+  try{ const r=await fn(); state.sync.error=''; state.sync.last=new Date(); return r; }
+  catch(e){ state.sync.error=errMsg(e); toast(errMsg(e)); throw e; }
+  finally{ state.sync.busy--; renderSync(); }
+}
+
+/* ================= Google sign-in ================= */
+const SCOPES='https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.email';
+const auth={token:null,exp:0,email:''};
+const gisReady=()=>!!(window.google&&google.accounts&&google.accounts.oauth2);
+function signIn(){
+  return new Promise((res,rej)=>{
+    if(!gisReady()){ rej(new Error('Google sign-in has not loaded yet. Check your connection, turn off any blocker for accounts.google.com, and reload the page.')); return; }
+    let hint=''; try{ hint=localStorage.getItem('ba_hint')||''; }catch(e){}
+    const client=google.accounts.oauth2.initTokenClient({
+      client_id:CONFIG.CLIENT_ID, scope:SCOPES, login_hint:hint||undefined,
+      callback:async r=>{
+        if(r.error){ rej(new Error(r.error_description||r.error)); return; }
+        auth.token=r.access_token; auth.exp=Date.now()+(Number(r.expires_in)||3600)*1000;
+        try{ const u=await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+auth.token}}).then(x=>x.json()); auth.email=u.email||''; localStorage.setItem('ba_hint',auth.email); }catch(e){}
+        res();
+      },
+      error_callback:e=>rej(new Error(e&&e.type==='popup_closed'?'The sign-in window was closed before it finished.':e&&e.type==='popup_failed_to_open'?'The browser blocked the Google sign-in window. Allow pop-ups for this page and try again.':'Sign-in did not complete.'))
+    });
+    client.requestAccessToken();
+  });
+}
+function signOut(){
+  try{ if(auth.token) google.accounts.oauth2.revoke(auth.token,()=>{}); }catch(e){}
+  auth.token=null; auth.email=''; try{ localStorage.removeItem('ba_hint'); }catch(e){}
+  state.loadedOnce=false; gate('signin');
+}
+
+/* ================= Google Sheets API ================= */
+const REG={
+  cr:{sheet:'Change Requests',label:'Change requests',id:'CR Ref',prefix:'Change request prefix',pad:2,fields:{'CR Ref':'text','Title':'text','Module':'text','Status':'text','Priority':'text','Date Raised':'date','Raised By':'text','Target Release':'text','Description':'text','Reason on Hold':'text','Dependency / Blocker':'text','Linked Requirement':'text','Confluence Page':'text','Notes':'text','Record Updated':'stamp','Updated By':'text'}},
+  req:{sheet:'Requirements',label:'Requirements',id:'Ref No',prefix:'Requirement prefix',pad:3,fields:{'Ref No':'text','Title':'text','Module':'text','Type':'text','Status':'text','Priority':'text','Owner':'text','Stakeholder':'text','Date Raised':'date','Due Date':'date','Description':'text','Business Rules':'text','Acceptance Criteria':'text','Open Questions':'text','Source Document':'text','Linked CR':'text','Confluence Page':'text','Notes':'text','Record Updated':'stamp','Updated By':'text'}},
+  task:{sheet:'Weekly Tasks',label:'Weekly tasks',id:'Task ID',prefix:'Task prefix',pad:3,fields:{'Task ID':'text','Task':'text','Week Commencing':'date','Due Date':'date','Owner':'text','Module':'text','Category':'text','Status':'text','Priority':'text','Linked Ref':'text','Carried From':'text','Notes':'text','Record Updated':'stamp','Updated By':'text'}},
+  page:{sheet:'Confluence Pages',label:'Confluence pages',id:'Page Ref',prefix:'Confluence page prefix',pad:3,fields:{'Page Ref':'text','Page Title':'text','URL':'text','Module':'text','Owner':'text','Review Every (days)':'number','Needs Update':'text','Last Checked On':'date','Page Updated On':'date','What Needs Changing':'text','Linked Refs':'text','Notes':'text','Record Updated':'stamp','Updated By':'text'}},
+  log:{sheet:'Daily Log',label:'Daily log',id:'Log ID',prefix:'Daily log prefix',pad:4,fields:{'Log ID':'text','Date':'date','Activity':'text','Module':'text','Category':'text','Linked Ref':'text','Hours':'number','Outcome':'text','Blockers':'text','Logged By':'text','Record Updated':'stamp','Updated By':'text'}}
+};
+const REPORT_TAB='Weekly Reports', STATUS_TAB='Statuses', SETTINGS_TAB='Settings';
+const REPORT_FIELDS={'Week Commencing':'date','Person':'text','Summary':'text','Risks and Issues':'text','Plan for Next Week':'text','Record Updated':'stamp','Updated By':'text'};
+const TAB_FIELDS={}; Object.values(REG).forEach(d=>{ TAB_FIELDS[d.sheet]=d.fields; });
+TAB_FIELDS[REPORT_TAB]=REPORT_FIELDS; TAB_FIELDS[STATUS_TAB]={'Register':'text','Status':'text','Colour':'text','Type':'text'}; TAB_FIELDS[SETTINGS_TAB]={'Setting':'text','Value':'text'};
+const ALL_TABS=Object.keys(TAB_FIELDS);
+const DEFAULT_SETTINGS=[['Project','ET1240 EPass 2.0'],['Change request prefix','CR-'],['Requirement prefix','ET1240-REQ-'],['Task prefix','TSK-'],['Confluence page prefix','CNF-'],['Daily log prefix','LOG-'],
+  ['Modules','Passport Services; Origin ID (OID); eGate; PISCES; Watchlist 2.0; Legacy / EPass sync; Payment Gateway; Laissez Passer; Golden ID; General'],
+  ['Task categories','Documentation; Requirements; Meeting; Review; Follow-up; Testing support; Admin'],
+  ['Daily log categories','Requirements analysis; Documentation; Meeting; Stakeholder follow-up; Review; Testing support; Admin'],
+  ['Due soon window (days)','2'],['Daily target hours','8']];
+const DEFAULT_STATUSES=[['Change requests','On hold','Amber','Open'],['Change requests','Awaiting feasibility','Amber','Open'],['Change requests','Awaiting ICS decision','Amber','Open'],['Change requests','Approved, not scheduled','Teal','Open'],['Change requests','Scheduled','Teal','Open'],['Change requests','Implemented','Green','Done'],['Change requests','Rejected','Grey','Closed'],
+  ['Requirements','Open','Teal','Open'],['Requirements','In analysis','Teal','Open'],['Requirements','Awaiting ICS confirmation','Amber','Open'],['Requirements','Deferred','Amber','Open'],['Requirements','Confirmed','Green','Done'],['Requirements','Closed','Grey','Closed'],
+  ['Weekly tasks','Not started','Grey','Open'],['Weekly tasks','In progress','Teal','Open'],['Weekly tasks','Blocked','Red','Open'],['Weekly tasks','Done','Green','Done'],['Weekly tasks','Carried over','Grey','Closed'],['Weekly tasks','Cancelled','Grey','Closed']];
+const WIDE=/Title|Task|Activity|Description|Reason|Rules|Criteria|Questions|Notes|Summary|Plan|Risks|Outcome|Blockers|Changing|Value/;
+
+const G={id:'',title:'',tabs:{},cols:{},canEdit:null};
+const qt=t=>"'"+t.replace(/'/g,"''")+"'";
+const colL=n=>{ let s=''; while(n>0){ const m=(n-1)%26; s=String.fromCharCode(65+m)+s; n=Math.floor((n-1)/26); } return s; };
+const trimAll=row=>(row||[]).map(x=>String(x??'').trim());
+function sheetIdFrom(s){ const m=/\/spreadsheets\/d\/([a-zA-Z0-9_-]{20,})/.exec(s||''); if(m) return m[1]; return /^[a-zA-Z0-9_-]{30,}$/.test(String(s||'').trim())?String(s).trim():''; }
+async function sfetch(path,opt){
+  opt=opt||{};
+  if(!auth.token||Date.now()>auth.exp-30000) throw Object.assign(new Error('SIGNIN'),{code:'SIGNIN'});
+  let res;
+  try{ res=await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+G.id+path,{method:opt.method||'GET',headers:{Authorization:'Bearer '+auth.token,'Content-Type':'application/json'},body:opt.body?JSON.stringify(opt.body):undefined}); }
+  catch(e){ throw Object.assign(new Error('Could not reach Google. Check your internet connection.'),{status:0}); }
+  if(res.status===401){ auth.token=null; throw Object.assign(new Error('SIGNIN'),{code:'SIGNIN'}); }
+  const j=await res.json().catch(()=>({}));
+  if(!res.ok) throw Object.assign(new Error((j.error&&j.error.message)||res.statusText||'Request failed'),{status:res.status});
+  return j;
+}
+function friendly(e,write){
+  const m=String(e.message||'');
+  let t=m;
+  if(/has not been used|is disabled|SERVICE_DISABLED/i.test(m)) t='The Google Sheets API is not switched on for your Google Cloud project. Enable it under APIs & Services > Library > Google Sheets API, wait a minute, then reload';
+  else if(e.status===404) t='That Google Sheet could not be found. Check the link';
+  else if(e.status===403) t=write?'You have view access to this sheet, so changes can\u2019t be saved. Ask the owner for edit access':`This sheet isn\u2019t shared with ${auth.email||'your Google account'}. Ask the owner to share it with you, or sign in with a different account`;
+  else if(e.status===429) t='Google is limiting requests for a moment. Wait a few seconds and try again';
+  return Object.assign(new Error(t),{status:e.status});
+}
+function serialISO(n){ const d=new Date(Math.round((Math.floor(n)-25569)*864e5)); return d.getUTCFullYear()+'-'+pad2(d.getUTCMonth()+1)+'-'+pad2(d.getUTCDate()); }
+function serialStamp(n){ const d=new Date(Math.round((n-25569)*86400)*1000); return d.getUTCFullYear()+'-'+pad2(d.getUTCMonth()+1)+'-'+pad2(d.getUTCDate())+' '+pad2(d.getUTCHours())+':'+pad2(d.getUTCMinutes())+':'+pad2(d.getUTCSeconds()); }
+function sOut(v,t){
+  if(v===''||v==null) return '';
+  if(typeof v==='boolean') return v?'Yes':'No';
+  if(typeof v==='number'&&t==='date') return serialISO(v);
+  if(typeof v==='number'&&t==='stamp') return serialStamp(v);
+  return String(v).trim();
+}
+const textSafe=s=>(/^[=+\-@]/.test(s)||/^[\d\s.,:\/\-]+$/.test(s))?"'"+s:s;
+function sIn(v,t){
+  const s=String(v??'');
+  if(s==='') return '';
+  if(t==='number'){ const n=Number(s); return isNaN(n)?textSafe(s):n; }
+  if(t==='date') return /^\d{4}-\d{2}-\d{2}$/.test(s)?s:textSafe(s);
+  if(t==='stamp') return /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(s)?s:textSafe(s);
+  return textSafe(s);
+}
+function nowStamp(){ const d=new Date(); return iso(d)+' '+pad2(d.getHours())+':'+pad2(d.getMinutes())+':'+pad2(d.getSeconds()); }
+function toObjs(values,fields){
+  if(!values||!values.length) return [];
+  const header=trimAll(values[0]), types=header.map(h=>fields[h]||'text'), out=[];
+  for(let r=1;r<values.length;r++){
+    const rec={}; let any=false;
+    header.forEach((h,c)=>{ if(!h) return; const v=sOut((values[r]||[])[c],types[c]); rec[h]=v; if(v!=='') any=true; });
+    if(any) out.push(rec);
+  }
+  return out;
+}
+function findRow(values,idCol,id){
+  const want=String(id||'').trim().toLowerCase();
+  if(idCol<0||!want) return -1;
+  for(let r=1;r<values.length;r++) if(String((values[r]||[])[idCol]??'').trim().toLowerCase()===want) return r;
+  return -1;
+}
+function nextIdFrom(ids,prefix,pad){
+  let max=0; const pre=String(prefix||'').toLowerCase();
+  ids.forEach(v=>{ v=String(v||'').trim(); if(v.toLowerCase().startsWith(pre)){ const n=parseInt(v.slice(pre.length),10); if(!isNaN(n)&&n>max) max=n; } });
+  return prefix+String(max+1).padStart(pad,'0');
+}
+async function loadMeta(){
+  const j=await sfetch('?fields='+encodeURIComponent('properties(title),sheets(properties(sheetId,title,gridProperties(columnCount)))'));
+  G.title=j.properties.title; G.tabs={}; G.cols={};
+  (j.sheets||[]).forEach(s=>{ G.tabs[s.properties.title]=s.properties.sheetId; G.cols[s.properties.title]=(s.properties.gridProperties||{}).columnCount||26; });
+}
+async function readTabs(titles){
+  titles=titles.filter(t=>t in G.tabs);
+  if(!titles.length) return {};
+  const q=titles.map(t=>'ranges='+encodeURIComponent(qt(t))).join('&');
+  const j=await sfetch('/values:batchGet?'+q+'&valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=SERIAL_NUMBER');
+  const out={}; (j.valueRanges||[]).forEach((vr,i)=>{ out[titles[i]]=vr.values||[]; });
+  return out;
+}
+function needsSetup(vals){
+  if(ALL_TABS.some(t=>!(t in G.tabs))) return true;
+  if(ALL_TABS.some(t=>{ const have=trimAll((vals[t]||[])[0]); return Object.keys(TAB_FIELDS[t]).some(h=>!have.includes(h)); })) return true;
+  const keys=(vals[SETTINGS_TAB]||[]).slice(1).map(r=>String((r||[])[0]??'').trim());
+  if(DEFAULT_SETTINGS.some(p=>!keys.includes(p[0]))) return true;
+  return (vals[STATUS_TAB]||[]).length<2;
+}
+async function setupTabs(vals){
+  const missing=ALL_TABS.filter(t=>!(t in G.tabs));
+  if(missing.length){
+    const r=await sfetch(':batchUpdate',{method:'POST',body:{requests:missing.map(t=>({addSheet:{properties:{title:t,gridProperties:{frozenRowCount:1}}}}))}});
+    r.replies.forEach((rep,i)=>{ const p=rep.addSheet.properties; G.tabs[missing[i]]=p.sheetId; G.cols[missing[i]]=(p.gridProperties||{}).columnCount||26; });
+  }
+  const pre=[], fmt=[], data=[];
+  for(const t of ALL_TABS){
+    const fields=TAB_FIELDS[t], want=Object.keys(fields), have=trimAll((vals[t]||[])[0]);
+    const add=want.filter(h=>!have.includes(h));
+    if(!add.length) continue;
+    const start=have.reduce((m,h,i)=>h?i+1:m,0)+1, total=start+add.length-1, sid=G.tabs[t];
+    if(total>G.cols[t]) pre.push({appendDimension:{sheetId:sid,dimension:'COLUMNS',length:total-G.cols[t]}});
+    data.push({range:qt(t)+'!'+colL(start)+'1',values:[add]});
+    fmt.push({repeatCell:{range:{sheetId:sid,startRowIndex:0,endRowIndex:1,startColumnIndex:0,endColumnIndex:total},cell:{userEnteredFormat:{backgroundColor:{red:29/255,green:100/255,blue:104/255},textFormat:{bold:true,foregroundColor:{red:1,green:1,blue:1}}}},fields:'userEnteredFormat(backgroundColor,textFormat)'}});
+    fmt.push({updateSheetProperties:{properties:{sheetId:sid,gridProperties:{frozenRowCount:1}},fields:'gridProperties.frozenRowCount'}});
+    add.forEach((h,i)=>{
+      const c=start+i-1, ty=fields[h];
+      if(ty==='date'||ty==='stamp') fmt.push({repeatCell:{range:{sheetId:sid,startRowIndex:1,startColumnIndex:c,endColumnIndex:c+1},cell:{userEnteredFormat:{numberFormat:{type:ty==='date'?'DATE':'DATE_TIME',pattern:ty==='date'?'yyyy-mm-dd':'yyyy-mm-dd hh:mm:ss'}}},fields:'userEnteredFormat.numberFormat'}});
+      fmt.push({updateDimensionProperties:{range:{sheetId:sid,dimension:'COLUMNS',startIndex:c,endIndex:c+1},properties:{pixelSize:WIDE.test(h)?320:(ty==='date'||ty==='stamp'?130:150)},fields:'pixelSize'}});
+    });
+  }
+  const setRows=(vals[SETTINGS_TAB]||[]).slice(1), keys=setRows.map(r=>String((r||[])[0]??'').trim());
+  const missingSet=DEFAULT_SETTINGS.filter(p=>!keys.includes(p[0]));
+  if(missingSet.length) data.push({range:qt(SETTINGS_TAB)+'!A'+(Math.max(setRows.length,0)+2),values:missingSet});
+  if((vals[STATUS_TAB]||[]).length<2) data.push({range:qt(STATUS_TAB)+'!A2',values:DEFAULT_STATUSES});
+  if(pre.length||fmt.length) await sfetch(':batchUpdate',{method:'POST',body:{requests:pre.concat(fmt)}});
+  if(data.length) await sfetch('/values:batchUpdate',{method:'POST',body:{valueInputOption:'RAW',data}});
+}
+async function probeEdit(){
+  try{ await sfetch(':batchUpdate',{method:'POST',body:{requests:[{findReplace:{find:'__ba_tracker_access_check__',replacement:'__ba_tracker_access_check__',allSheets:true}}]}}); return true; }
+  catch(e){ if(e.code==='SIGNIN') throw e; return e.status!==403; }
+}
+function settingsFrom(values){
+  const out={}; DEFAULT_SETTINGS.forEach(p=>{ out[p[0]]=p[1]; });
+  (values||[]).slice(1).forEach(r=>{ const k=String((r||[])[0]??'').trim(); if(k) out[k]=String((r||[])[1]??''); });
+  return out;
+}
+function statusesFrom(values){
+  let rows=(values||[]).slice(1).map(trimAll).filter(r=>r[0]&&r[1]).map(r=>({register:r[0],status:r[1],colour:r[2]||'Grey',type:r[3]||'Open'}));
+  if(!rows.length) rows=DEFAULT_STATUSES.map(r=>({register:r[0],status:r[1],colour:r[2],type:r[3]}));
+  return rows;
+}
+async function writeRow(tab,r,header,logical){
+  const types=header.map(h=>TAB_FIELDS[tab][h]||'text');
+  const row=logical.map((v,c)=>sIn(v,types[c]));
+  if(r>0) await sfetch('/values/'+encodeURIComponent(qt(tab)+'!A'+(r+1)+':'+colL(header.length)+(r+1))+'?valueInputOption=USER_ENTERED',{method:'PUT',body:{values:[row]}});
+  else await sfetch('/values/'+encodeURIComponent(qt(tab)+'!A1')+':append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS',{method:'POST',body:{values:[row]}});
+}
+const logicalRow=(values,r,header,tab)=>header.map((h,c)=>r>0?sOut((values[r]||[])[c],TAB_FIELDS[tab][h]||'text'):'');
+const has=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
+
+const SheetsAPI={
+  async getAll(again){
+    await loadMeta();
+    let vals=await readTabs(ALL_TABS);
+    if(!again&&needsSetup(vals)){
+      try{ await setupTabs(vals); G.canEdit=true; return SheetsAPI.getAll(true); }
+      catch(e){ if(e.code==='SIGNIN') throw e; if(e.status===403) G.canEdit=false; else throw e; }
+    }
+    if(G.canEdit==null) G.canEdit=await probeEdit();
+    const data={}; for(const [k,d] of Object.entries(REG)) data[k]=toObjs(vals[d.sheet],d.fields);
+    return {user:{email:auth.email,canEdit:G.canEdit},settings:settingsFrom(vals[SETTINGS_TAB]),statuses:statusesFrom(vals[STATUS_TAB]),data,reports:toObjs(vals[REPORT_TAB],REPORT_FIELDS),sheetTitle:G.title};
+  },
+  async saveRecord(key,rec,opts){
+    opts=opts||{};
+    const d=REG[key], tab=d.sheet;
+    const values=(await readTabs([tab]))[tab]||[], header=trimAll(values[0]);
+    if(!header.length) throw new Error('The '+tab+' tab has no header row. Reload the page to repair it.');
+    const idCol=header.indexOf(d.id), sc=header.indexOf('Record Updated'), bc=header.indexOf('Updated By');
+    let r=-1;
+    if(!opts.isNew){
+      const look=opts.origId||rec[d.id];
+      r=findRow(values,idCol,look);
+      if(r<0) throw new Error(look+' is no longer in the sheet. Someone may have deleted it. Refresh to see the latest.');
+      const cur=sc>=0?sOut((values[r]||[])[sc],'stamp'):'';
+      if(opts.expected!=null&&cur!==String(opts.expected)){ const who=bc>=0&&(values[r]||[])[bc]?shortName(values[r][bc]):'someone else'; throw new Error('CONFLICT|'+look+' was changed by '+who+' after you opened it. Refresh to see their changes, then edit again.'); }
+    }
+    const ids=values.slice(1).map(row=>(row||[])[idCol]);
+    if(opts.isNew&&(opts.autoId||!String(rec[d.id]||'').trim())) rec[d.id]=nextIdFrom(ids,state.settings[d.prefix]||'',d.pad);
+    const newId=String(rec[d.id]||'').trim();
+    const clash=findRow(values,idCol,newId);
+    if(clash>=0&&clash!==r) throw new Error(newId+' is already used. Choose a different reference.');
+    rec[d.id]=newId; rec['Record Updated']=nowStamp(); rec['Updated By']=auth.email;
+    if(key==='log'&&opts.isNew&&!rec['Logged By']) rec['Logged By']=auth.email;
+    const logical=logicalRow(values,r,header,tab).map((v,c)=>header[c]&&has(rec,header[c])?String(rec[header[c]]??'').trim():v);
+    await writeRow(tab,r,header,logical);
+    const out={}; header.forEach((h,c)=>{ if(h) out[h]=logical[c]; });
+    return out;
+  },
+  async deleteRecord(key,id,expected){
+    const d=REG[key], tab=d.sheet;
+    const values=(await readTabs([tab]))[tab]||[], header=trimAll(values[0]);
+    const r=findRow(values,header.indexOf(d.id),id);
+    if(r<0) return true;
+    const sc=header.indexOf('Record Updated');
+    if(expected!=null&&sc>=0&&sOut((values[r]||[])[sc],'stamp')!==String(expected)) throw new Error('CONFLICT|'+id+' was changed by someone else after you opened it. Refresh, then try again.');
+    await sfetch(':batchUpdate',{method:'POST',body:{requests:[{deleteDimension:{range:{sheetId:G.tabs[tab],dimension:'ROWS',startIndex:r,endIndex:r+1}}}]}});
+    return true;
+  },
+  async carryOver(week,ids){
+    const d=REG.task, tab=d.sheet;
+    const values=(await readTabs([tab]))[tab]||[], header=trimAll(values[0]);
+    const col=h=>header.indexOf(h);
+    const sts=state.statuses.task, typeOf=n=>(sts.find(s=>s.status===n)||{type:'Open'}).type;
+    const carried=(sts.find(s=>/carr/i.test(s.status))||sts.find(s=>s.type==='Closed')||{status:'Carried over'}).status;
+    const next=addISO(week,7), stamp=nowStamp(), me=auth.email;
+    const allIds=values.slice(1).map(row=>(row||[])[col(d.id)]);
+    const updates=[], rows=[];
+    for(const id of ids){
+      const r=findRow(values,col(d.id),id); if(r<0) continue;
+      const lg=logicalRow(values,r,header,tab);
+      if(typeOf(lg[col('Status')])!=='Open') continue;
+      const copy=lg.slice();
+      lg[col('Status')]=carried; lg[col('Record Updated')]=stamp; lg[col('Updated By')]=me;
+      updates.push({range:qt(tab)+'!A'+(r+1)+':'+colL(header.length)+(r+1),values:[lg.map((v,c)=>sIn(v,TAB_FIELDS[tab][header[c]]||'text'))]});
+      const nid=nextIdFrom(allIds,state.settings[d.prefix]||'',d.pad); allIds.push(nid);
+      copy[col(d.id)]=nid; copy[col('Week Commencing')]=next; copy[col('Carried From')]=id; copy[col('Record Updated')]=stamp; copy[col('Updated By')]=me;
+      rows.push(copy.map((v,c)=>sIn(v,TAB_FIELDS[tab][header[c]]||'text')));
+    }
+    if(updates.length) await sfetch('/values:batchUpdate',{method:'POST',body:{valueInputOption:'USER_ENTERED',data:updates}});
+    if(rows.length) await sfetch('/values/'+encodeURIComponent(qt(tab)+'!A1')+':append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS',{method:'POST',body:{values:rows}});
+    const fresh=(await readTabs([tab]))[tab];
+    return {moved:rows.length,rows:toObjs(fresh,d.fields)};
+  },
+  async saveConfig(settings,list){
+    const vals=await readTabs(Object.values(REG).map(d=>d.sheet));
+    const data=[];
+    list.forEach(s=>{
+      if(!s.orig||s.orig===s.status) return;
+      const k=Object.keys(REG).find(k=>REG[k].label===s.register); if(!k) return;
+      const v=vals[REG[k].sheet]||[], c=trimAll(v[0]).indexOf('Status'); if(c<0) return;
+      for(let r=1;r<v.length;r++) if(String((v[r]||[])[c]??'').trim()===s.orig) data.push({range:qt(REG[k].sheet)+'!'+colL(c+1)+(r+1),values:[[textSafe(s.status)]]});
+    });
+    data.push({range:qt(SETTINGS_TAB)+'!A2',values:Object.entries(settings).map(([k,v])=>[k,textSafe(String(v??''))])});
+    data.push({range:qt(STATUS_TAB)+'!A2',values:list.map(s=>[s.register,textSafe(s.status),s.colour,s.type])});
+    await sfetch('/values:batchClear',{method:'POST',body:{ranges:[qt(SETTINGS_TAB)+'!A2:B',qt(STATUS_TAB)+'!A2:D']}});
+    await sfetch('/values:batchUpdate',{method:'POST',body:{valueInputOption:'USER_ENTERED',data}});
+    return SheetsAPI.getAll(true);
+  },
+  async saveReport(rep,expected){
+    const tab=REPORT_TAB, values=(await readTabs([tab]))[tab]||[], header=trimAll(values[0]);
+    const wc=header.indexOf('Week Commencing'), pc=header.indexOf('Person'), sc=header.indexOf('Record Updated');
+    let r=-1;
+    for(let i=1;i<values.length;i++) if(sOut((values[i]||[])[wc],'date')===rep['Week Commencing']&&sameUser((values[i]||[])[pc],rep.Person)){ r=i; break; }
+    if(r>0&&expected!=null&&sOut((values[r]||[])[sc],'stamp')!==String(expected)) throw new Error('CONFLICT|These report notes were changed by someone else after you opened them. Refresh to see the latest.');
+    rep['Record Updated']=nowStamp(); rep['Updated By']=auth.email;
+    const logical=logicalRow(values,r,header,tab).map((v,c)=>has(rep,header[c])?String(rep[header[c]]??''):v);
+    await writeRow(tab,r,header,logical);
+    const out={}; header.forEach((h,c)=>{ if(h) out[h]=logical[c]; });
+    return out;
+  }
+};
+
+/* ================= Connect screens ================= */
+function gate(phase,error){
+  state.phase=phase; state.mode=phase==='app'?state.mode:null;
+  document.body.classList.add('gate');
+  $('#viewTitle').textContent='BA tracker'; $('#viewSub').textContent='ET1240 EPass 2.0'; $('#banner').innerHTML='';
+  const err=error?`<p class="err" role="alert">${esc(error)}</p>`:'';
+  let body='';
+  if(phase==='setup') body=`<h2>One setting is missing</h2>
+    <p>This page needs your Google OAuth client ID before anyone can sign in. Open <b>index.html</b>, find <code>CLIENT_ID</code> near the top of the script, paste your client ID between the quotes, and upload the file again.</p>
+    <p>Until then you can look around with sample data.</p>
+    <div class="row"><button class="btn primary" data-act="preview">Open preview with sample data</button></div>`;
+  else if(phase==='signin') body=`<h2>Sign in to open the tracker</h2>
+    <p>Use the Google account that the tracker sheet is shared with. You\u2019ll only see and edit what the sheet allows.</p>
+    <div class="row"><button class="btn primary" data-act="signin">Sign in with Google</button></div>${err}`;
+  else body=`<h2>Connect your Google Sheet</h2>
+    <p>Paste the link to the tracker sheet. A blank sheet works too: the tracker adds its tabs the first time it opens.</p>
+    <label class="lbl" for="sheetLink">Google Sheet link</label>
+    <div class="row"><input class="inp" id="sheetLink" placeholder="https://docs.google.com/spreadsheets/d/..." value="${esc(G.id?'https://docs.google.com/spreadsheets/d/'+G.id+'/edit':CONFIG.SHEET_URL||'')}" style="flex:1"><button class="btn primary" data-act="connect">Connect</button></div>
+    ${err}<p class="hint" style="margin-top:14px">Signed in as ${esc(auth.email||'your Google account')}. <button class="link" data-act="sign-out">Use a different account</button></p>`;
+  $('#content').innerHTML=`<div class="connect">${body}</div>`;
+  const f=$('#content .connect input, #content .connect .btn.primary'); if(f) f.focus();
+}
+function enterApp(mode){
+  state.mode=mode; state.phase='app';
+  document.body.classList.remove('gate');
+  load(false);
+}
+async function doSignIn(){
+  const b=$('[data-act="signin"]'); if(b){ b.disabled=true; b.textContent='Waiting for Google\u2026'; }
+  try{ await signIn(); G.canEdit=null; if(G.id) enterApp('sheets'); else gate('pick'); }
+  catch(e){ gate('signin',errMsg(e)); }
+}
+function doConnect(){
+  const id=sheetIdFrom($('#sheetLink').value);
+  if(!id){ gate('pick','That doesn\u2019t look like a Google Sheet link. Copy it from the browser address bar while the sheet is open.'); return; }
+  G.id=id; G.canEdit=null; try{ localStorage.setItem('ba_sheet',id); }catch(e){}
+  state.loadedOnce=false; enterApp('sheets');
+}
+function teamLink(){ return location.origin+location.pathname+'?sheet='+G.id; }
+async function copyTeamLink(){
+  const url=teamLink();
+  try{ await navigator.clipboard.writeText(url); toast('Link copied. Anyone the sheet is shared with can open it.'); }
+  catch(e){ window.prompt('Copy this link and send it to your team:',url); }
+}
+
+/* ================= Shell rendering ================= */
+function renderAll(){ renderSide(); renderTop(); renderContent(); }
+function navCounts(){
+  const tw=thisWeek();
+  return {
+    cr:state.data.cr.filter(r=>!isClosed('cr',r)).length,
+    req:state.data.req.filter(r=>!isClosed('req',r)).length,
+    task:state.data.task.filter(r=>r['Week Commencing']===tw && !isClosed('task',r)).length,
+    page:state.data.page.filter(r=>pageStatus(r).rank<4).length
+  };
+}
+function renderSide(){
+  $('#projName').textContent=state.settings['Project']||'';
+  const c=navCounts();
+  $('#nav').innerHTML=NAV.map(n=>n.group?`<div class="nav-group">${n.group}</div>`:
+    `<button class="nav-item${state.view===n.v?' active':''}" data-view="${n.v}"${state.view===n.v?' aria-current="page"':''}><svg viewBox="0 0 20 20" aria-hidden="true">${n.icon}</svg>${n.label}${c[n.v]!=null?`<span class="count">${c[n.v]}</span>`:''}</button>`).join('');
+  const live=state.mode==='sheets';
+  $('#userEmail').textContent=state.user.email||(live?'Signed in':'Preview');
+  $('#sheetName').textContent=live&&state.sheetTitle?'Sheet: '+state.sheetTitle:'';
+  ['copyLinkBtn','switchBtn','signOutBtn'].forEach(id=>{ $('#'+id).hidden=!live; });
+  const a=$('#access'); a.textContent=can()?'Can edit':'View only'; a.className='pill '+(can()?'tone-info':'tone-muted');
+  $('#settingsBtn').hidden=!can();
+}
+function renderTop(){
+  const v=state.view;
+  const titles={dash:'Dashboard',log:'Daily log',report:'Weekly report'};
+  const subs={
+    dash:`${state.settings['Project']||''} overview for ${fmtDate(today(),'long')}`,
+    log:'What you worked on each day. Entries roll up into the weekly report.',
+    report:'Built from the daily log and register activity for the week.'
+  };
+  $('#viewTitle').textContent=titles[v]||SCHEMA[v].tab;
+  $('#viewSub').textContent=subs[v]||SCHEMA[v].intro;
+  let b=state.mode==='preview'?'<div class="banner">Preview with sample data. Nothing you change here is saved.</div>':'';
+  if(state.needSignin) b+='<div class="banner">Your Google sign-in has expired. <button class="btn sm" data-act="resignin" style="margin-left:8px">Sign in again</button></div>';
+  $('#banner').innerHTML=b;
+  renderSync();
+}
+function renderSync(){
+  const el=$('#sync'); let cls='', txt='';
+  if(state.sync.busy){ cls='busy'; txt='Saving\u2026'; }
+  else if(state.sync.error){ cls='bad'; txt=state.sync.error; }
+  else if(state.sync.last){ txt='Up to date at '+pad2(state.sync.last.getHours())+':'+pad2(state.sync.last.getMinutes()); }
+  el.className='sync'+(cls?' '+cls:''); el.textContent=txt; el.title=txt; el.hidden=!txt;
+}
+function renderContent(){
+  const c=$('#content');
+  if(state.loading){ c.innerHTML='<div class="loading"><span class="spin"></span>Loading the tracker</div>'; return; }
+  if(state.loadError){
+    c.innerHTML=`<div class="empty" style="text-align:left;max-width:680px;margin:0 auto"><h3>The tracker could not load</h3><p>${esc(state.loadError)}.</p><button class="btn primary" data-act="refresh">Try again</button> <button class="btn" data-act="switch-sheet">Use a different sheet</button></div>`;
+    return;
+  }
+  const fn={dash:renderDash,log:renderLog,report:renderReport}[state.view];
+  if(fn) fn(); else renderRegister();
+}
+function setView(v,filter){
+  state.view=v;
+  if(filter && state.filters[v]){
+    Object.assign(state.filters[v],{q:'',module:'',status:''},filter);
+    if(filter.status && REG_LABEL[v] && statusMeta(v,filter.status).type!=='Open') state.filters[v].showClosed=true;
+  }
+  renderSide(); renderTop(); renderContent(); window.scrollTo(0,0);
+}
+
+/* ================= Dashboard ================= */
+function personSelect(){
+  const people=new Set(); if(state.user.email) people.add(state.user.email);
+  state.data.log.forEach(r=>{ if(r['Logged By']) people.add(r['Logged By']); });
+  if(people.size<2 && !state.user.email) return '';
+  return `<select class="inp" data-person aria-label="Whose entries"><option value="all"${state.person==='all'?' selected':''}>Everyone</option>${[...people].map(p=>`<option value="${esc(p)}"${sameUser(p,state.person)?' selected':''}>${sameUser(p,state.user.email)?'Me':esc(shortName(p))}</option>`).join('')}</select>`;
+}
+function renderDash(){
+  const td=today(), tw=thisWeek(), horizon=addISO(td,7);
+  const openCR=state.data.cr.filter(r=>!isClosed('cr',r));
+  const crTop=topStatus(openCR);
+  const openReq=state.data.req.filter(r=>!isClosed('req',r));
+  const overdueReq=openReq.filter(r=>parseISO(r['Due Date']) && r['Due Date']<td).length;
+  const soonReq=openReq.filter(r=>parseISO(r['Due Date']) && r['Due Date']>=td && r['Due Date']<=horizon).length;
+  const wk=state.data.task.filter(r=>r['Week Commencing']===tw && statusMeta('task',r.Status).type!=='Closed');
+  const wkDone=wk.filter(r=>isDone('task',r)).length;
+  const ps=state.data.page.map(pageStatus);
+  const attention=ps.filter(p=>p.rank<4).length, needUpd=ps.filter(p=>p.rank===0).length, overdueChk=ps.filter(p=>p.rank===1).length;
+  const hrs=sumH(logsFor(r=>inWeek(r.Date,tw)));
+  const target=num(state.settings['Daily target hours'],8)*5;
+  const who=state.person==='all'?'Team hours':'Your hours';
+
+  const kpi=(go,label,value,sub,extra='',alert=false)=>`<button class="kpi${alert?' alert':''}" data-view="${go}"><span class="kpi-label">${label}</span><span class="kpi-value">${value}</span><span class="kpi-sub">${sub}</span>${extra}</button>`;
+  const html=`
+  <div class="kpis">
+    ${kpi('cr','Change requests open',openCR.length,crTop?`${crTop.n} ${esc(crTop.status)}`:'Nothing open')}
+    ${kpi('req','Outstanding requirements',openReq.length,overdueReq?`${overdueReq} overdue, ${soonReq} due this week`:soonReq?`${soonReq} due in the next 7 days`:'None overdue',
+      '',overdueReq>0)}
+    ${kpi('task','This week\u2019s tasks',`${wkDone}<small> / ${wk.length}</small>`,wk.length?`${Math.round(wkDone/wk.length*100)}% done`:'No tasks planned',
+      `<span class="bar"><i style="width:${wk.length?wkDone/wk.length*100:0}%"></i></span>`)}
+    ${kpi('page','Pages needing attention',attention,attention?[needUpd&&`${needUpd} need update`,overdueChk&&`${overdueChk} overdue`].filter(Boolean).join(', ')||'Checks due soon':'All pages current','',needUpd>0)}
+    ${kpi('log',`${who} this week`,fmtH(hrs).replace('h','<small>h</small>'),`Target ${target}h`,
+      `<span class="bar"><i style="width:${Math.min(100,hrs/target*100)}%;background:var(--teal)"></i></span>`)}
+  </div>
+  <div class="grid">
+    <section class="panel span-4"><header><h3>Change requests by status</h3><button class="link" data-view="cr">View all</button></header><div class="panel-body">${statusBars('cr')}</div></section>
+    <section class="panel span-4"><header><h3>Requirements by status</h3><button class="link" data-view="req">View all</button></header><div class="panel-body">${statusBars('req')}</div></section>
+    <section class="panel span-4"><header><h3>Hours logged this week</h3>${personSelect()}</header><div class="panel-body">${weekChart(tw)}</div></section>
+    <section class="panel span-6"><header><h3>Open work by module</h3><div class="legend"><span><i class="sw seg-cr"></i>Change requests</span><span><i class="sw seg-req"></i>Requirements</span></div></header><div class="panel-body">${moduleBars(openCR,openReq)}</div></section>
+    <section class="panel span-6"><header><h3>Due soon and overdue</h3></header><div class="panel-body">${dueList(openReq,horizon)}</div></section>
+    <section class="panel span-6"><header><h3>Confluence review queue</h3><button class="link" data-view="page">View all</button></header><div class="panel-body">${pageQueue()}</div></section>
+    <section class="panel span-6"><header><h3>Recent updates</h3></header><div class="panel-body">${recentList()}</div></section>
+  </div>`;
+  $('#content').innerHTML=html;
+}
+function topStatus(rows){
+  const c={}; rows.forEach(r=>{ if(r.Status) c[r.Status]=(c[r.Status]||0)+1; });
+  const e=Object.entries(c).sort((a,b)=>b[1]-a[1])[0];
+  return e?{status:e[0],n:e[1]}:null;
+}
+function statusBars(k){
+  if(!state.data[k].length) return `<p class="mini-empty">No ${SCHEMA[k].tab.toLowerCase()} yet.</p>`;
+  const counts={}; state.data[k].forEach(r=>{ const s=r.Status||'(none)'; counts[s]=(counts[s]||0)+1; });
+  const rows=state.statuses[k].map(s=>({label:s.status,n:counts[s.status]||0,tone:TONES[s.colour]||'muted',type:s.type})).filter(x=>x.n>0||x.type==='Open');
+  Object.keys(counts).forEach(s=>{ if(!state.statuses[k].some(x=>x.status===s)) rows.push({label:s,n:counts[s],tone:'muted'}); });
+  const max=Math.max(1,...rows.map(x=>x.n));
+  return rows.map(x=>`<button class="hbar" data-view="${k}" data-status="${esc(x.label)}"><span class="lbl">${esc(x.label)}</span><span class="track"><span class="fill fill-${x.tone}" style="width:${x.n/max*100}%"></span></span><span class="n">${x.n}</span></button>`).join('');
+}
+function weekChart(week){
+  const days=[...Array(7)].map((_,i)=>addISO(week,i));
+  const hrs=days.map(d=>sumH(logsFor(r=>r.Date===d)));
+  const target=num(state.settings['Daily target hours'],8);
+  const max=Math.max(target*1.25,...hrs,1);
+  return `<div class="chart"><div class="plot">
+    <div class="target" style="bottom:${target/max*100}%"><span>${target}h target</span></div>
+    ${days.map((d,i)=>`<button class="${hrs[i]?'':'off'}" data-day="${d}" title="${fmtDate(d,'day')}: ${fmtH(hrs[i])}"><span class="stick" style="height:${hrs[i]/max*100}%"></span></button>`).join('')}
+  </div><div class="xlabels">${days.map((d,i)=>`<span class="${d===today()?'today':''}">${parseISO(d).toLocaleDateString('en-GB',{weekday:'short'})}<b>${hrs[i]?fmtH(hrs[i]):'\u2013'}</b></span>`).join('')}</div></div>`;
+}
+function moduleBars(cr,req){
+  const m={};
+  cr.forEach(r=>{ const k=r.Module||'Unassigned'; (m[k]=m[k]||{cr:0,req:0}).cr++; });
+  req.forEach(r=>{ const k=r.Module||'Unassigned'; (m[k]=m[k]||{cr:0,req:0}).req++; });
+  const rows=Object.entries(m).map(([k,v])=>({k,...v,t:v.cr+v.req})).sort((a,b)=>b.t-a.t).slice(0,8);
+  if(!rows.length) return '<p class="mini-empty">No open change requests or requirements.</p>';
+  const max=Math.max(...rows.map(r=>r.t));
+  return rows.map(r=>`<button class="hbar" data-view="req" data-module="${esc(r.k==='Unassigned'?'':r.k)}" title="${r.cr} change requests, ${r.req} requirements"><span class="lbl">${esc(r.k)}</span><span class="track" style="background:none"><span class="stack" style="width:${r.t/max*100}%">${r.cr?`<i class="seg-cr" style="flex:${r.cr}"></i>`:''}${r.req?`<i class="seg-req" style="flex:${r.req}"></i>`:''}</span></span><span class="n">${r.t}</span></button>`).join('');
+}
+function dueList(openReq,horizon){
+  const items=[
+    ...openReq.map(r=>({k:'req',r,d:r['Due Date']})),
+    ...state.data.task.filter(r=>!isClosed('task',r)).map(r=>({k:'task',r,d:r['Due Date']}))
+  ].filter(x=>parseISO(x.d) && x.d<=horizon).sort((a,b)=>a.d.localeCompare(b.d)).slice(0,8);
+  if(!items.length) return '<p class="mini-empty">Nothing due in the next 7 days.</p>';
+  return `<ul class="items">${items.map(x=>{ const l=dueLabel(x.d); return `<li class="item" data-open="${x.k}:${x.r._uid}"><span class="ref">${esc(x.r[SCHEMA[x.k].id])}</span><span class="t">${esc(titleOf(x.k,x.r))}</span><span class="pill tone-${l.tone}">${l.text}</span></li>`; }).join('')}</ul>`;
+}
+function pageQueue(){
+  const rows=state.data.page.map(r=>({r,s:pageStatus(r)})).filter(x=>x.s.rank<4).sort((a,b)=>a.s.rank-b.s.rank).slice(0,6);
+  if(!state.data.page.length) return '<p class="mini-empty">No pages tracked yet.</p>';
+  if(!rows.length) return '<p class="mini-empty">Every page is current.</p>';
+  return `<ul class="items">${rows.map(x=>`<li class="item" data-open="page:${x.r._uid}"><span class="ref">${esc(x.r['Page Ref'])}</span><span class="t">${esc(x.r['Page Title'])}</span><span class="pill tone-${x.s.tone}">${x.s.label}</span></li>`).join('')}</ul>`;
+}
+function recentList(){
+  const all=[];
+  for(const k of ['cr','req','task','page','log']) state.data[k].forEach(r=>{ if(r['Record Updated']) all.push({k,r}); });
+  all.sort((a,b)=>String(b.r['Record Updated']).localeCompare(String(a.r['Record Updated'])));
+  if(!all.length) return '<p class="mini-empty">Nothing has been updated yet.</p>';
+  return `<ul class="items">${all.slice(0,7).map(x=>`<li class="item" data-open="${x.k}:${x.r._uid}"><span class="ref">${esc(x.r[SCHEMA[x.k].id])}</span><span class="t">${esc(titleOf(x.k,x.r))}</span>${x.r.Status?`<span class="pill tone-${statusMeta(x.k,x.r.Status).tone}">${esc(x.r.Status)}</span>`:'<span></span>'}<span class="m">${SCHEMA[x.k].tab} updated ${whenText(x.r['Record Updated'])}${x.r['Updated By']?' by '+esc(shortName(x.r['Updated By'])):''}</span></li>`).join('')}</ul>`;
+}
+
+/* ================= Registers ================= */
+function renderRegister(){
+  const k=state.view, s=SCHEMA[k], v=state.filters[k];
+  const statusOpts=k==='page'?PAGE_STATUSES:state.statuses[k].map(x=>x.status);
+  $('#content').innerHTML=`
+    <div class="toolbar">
+      <div class="filters">
+        <input class="inp" type="search" data-f="q" placeholder="Search ${s.tab.toLowerCase()}" value="${esc(v.q)}" aria-label="Search">
+        <select class="inp" data-f="module" aria-label="Module"><option value="">All modules</option>${moduleOptions().map(m=>`<option${m===v.module?' selected':''}>${esc(m)}</option>`).join('')}</select>
+        <select class="inp" data-f="status" aria-label="Status"><option value="">Any status</option>${statusOpts.map(o=>`<option${o===v.status?' selected':''}>${esc(o)}</option>`).join('')}</select>
+        ${k!=='page'?`<label class="check"><input type="checkbox" data-f="showClosed"${v.showClosed?' checked':''}> Include ${k==='task'?'finished':'closed'}</label>`:''}
+      </div>
+      ${can()?`<button class="btn primary" data-act="add">Add ${s.one}</button>`:''}
+    </div>
+    <div id="tableArea"></div>`;
+  renderTable();
+}
+function baseRows(k){
+  let rows=state.data[k];
+  if(k==='task' && state.week!=='all') rows=rows.filter(r=>r['Week Commencing']===state.week);
+  return rows;
+}
+function visibleRows(k){
+  const s=SCHEMA[k], v=state.filters[k];
+  let rows=baseRows(k).slice();
+  if(v.status) rows=rows.filter(r=>(k==='page'?pageStatus(r).label:r.Status)===v.status);
+  else if(!v.showClosed) rows=rows.filter(r=>!isClosed(k,r));
+  if(v.module) rows=rows.filter(r=>r.Module===v.module);
+  if(v.q){ const q=v.q.toLowerCase(); rows=rows.filter(r=>Object.entries(r).some(([key,x])=>key!=='_uid' && String(x).toLowerCase().includes(q))); }
+  if(v.sort){
+    const {col,dir}=v.sort, f=s.fields.find(x=>x.k===col);
+    const order=f&&f.t==='status'?state.statuses[k].map(x=>x.status):f&&f.opts?f.opts:null;
+    const key=r=>col==='__status'?pageStatus(r).rank:order?order.indexOf(r[col]):String(r[col]||'');
+    rows.sort((a,b)=>{ const x=key(a),y=key(b); if(x===''&&y!=='') return 1; if(y===''&&x!=='') return -1;
+      return (typeof x==='number'?x-y:String(x).localeCompare(String(y),undefined,{numeric:true,sensitivity:'base'}))*dir; });
+  } else if(k==='page') rows.sort((a,b)=>pageStatus(a).rank-pageStatus(b).rank);
+  return rows;
+}
+function listCols(k){
+  const s=SCHEMA[k]; const cols=s.fields.filter(f=>f.list);
+  if(k==='task' && state.week==='all') cols.splice(2,0,s.fields.find(f=>f.k==='Week Commencing'));
+  if(k==='page'){ cols.splice(cols.findIndex(f=>f.k==='Owner')+1,0,{k:'__status',label:'Review status'}); if(can()) cols.push({k:'__actions',label:'',nosort:1}); }
+  return cols;
+}
+function weekStrip(){
+  const all=state.week==='all';
+  const rows=all?[]:state.data.task.filter(r=>r['Week Commencing']===state.week && statusMeta('task',r.Status).type!=='Closed');
+  const carried=all?0:state.data.task.filter(r=>r['Week Commencing']===state.week && /carr/i.test(r.Status||'')).length;
+  const done=rows.filter(r=>isDone('task',r)).length, pct=rows.length?Math.round(done/rows.length*100):0;
+  return `<div class="strip">
+    <div class="nav3">
+      <button class="btn ghost arrow" data-act="week-prev" aria-label="Previous week"${all?' disabled':''}>\u2039</button>
+      <strong>${all?'All weeks':'Week of '+fmtDate(state.week)}</strong>
+      <button class="btn ghost arrow" data-act="week-next" aria-label="Next week"${all?' disabled':''}>\u203A</button>
+      <button class="btn sm" data-act="week-this"${state.week===thisWeek()?' disabled':''}>This week</button>
+      <button class="btn sm" data-act="week-all"${all?' disabled':''}>All weeks</button>
+    </div>
+    ${all?'':`<div class="progress"><span>${done} of ${rows.length} done${carried?`, ${carried} carried over`:''}</span><span class="bar"><i style="width:${pct}%"></i></span></div>
+    ${can()?'<button class="btn" data-act="carry">Carry unfinished to next week</button>':''}`}
+  </div>`;
+}
+function emptyState(k){
+  const s=SCHEMA[k];
+  if(baseRows(k).length) return `<div class="empty"><h3>Nothing matches these filters</h3><p>Try a different search, or clear the filters to see everything.</p><button class="btn" data-act="clear-filters">Clear filters</button></div>`;
+  return `<div class="empty"><h3>${s.empty[0]}</h3><p>${s.empty[1]}</p>${can()?`<button class="btn primary" data-act="add">Add ${s.one}</button>`:''}</div>`;
+}
+function renderTable(){
+  const k=state.view, v=state.filters[k];
+  let html=k==='task'?weekStrip():'';
+  const rows=visibleRows(k);
+  if(!rows.length) html+=emptyState(k);
+  else{
+    const cols=listCols(k);
+    const head=cols.map(c=>{
+      if(c.nosort) return '<th class="static"></th>';
+      const on=v.sort&&v.sort.col===c.k;
+      return `<th scope="col" data-sort="${esc(c.k)}"${on?` aria-sort="${v.sort.dir>0?'ascending':'descending'}"`:''}>${esc(c.label||c.k)}${on?`<span class="dir">${v.sort.dir>0?'\u2191':'\u2193'}</span>`:''}</th>`;
+    }).join('');
+    html+=`<div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody>${rows.map(r=>`<tr class="row" tabindex="0" data-open="${k}:${r._uid}">${cols.map(c=>cellHTML(c,r,k)).join('')}</tr>`).join('')}</tbody></table></div>`;
+  }
+  $('#tableArea').innerHTML=html;
+}
+function cellHTML(c,r,k){
+  const v=r[c.k];
+  if(c.k==='__status'){
+    const ps=pageStatus(r);
+    const sub=ps.diff!=null?(ps.diff<0?`${-ps.diff} day${ps.diff===-1?'':'s'} overdue`:ps.diff===0?'Due today':`Next check ${fmtDate(iso(ps.due),'short')}`):'';
+    return `<td><span class="pill tone-${ps.tone}">${ps.label}</span>${sub?`<span class="sub">${sub}</span>`:''}</td>`;
+  }
+  if(c.k==='__actions'){
+    const ps=pageStatus(r);
+    return `<td class="actions-cell">${ps.rank===0?`<button class="btn sm" data-act="pg-updated" data-uid="${r._uid}">Mark updated</button>`
+      :`<button class="btn sm" data-act="pg-checked" data-uid="${r._uid}">Checked, no change</button><button class="btn sm ghost" data-act="pg-flag" data-uid="${r._uid}">Needs update</button>`}</td>`;
+  }
+  if(c.t==='id') return `<td class="ref">${esc(v)}</td>`;
+  if(c.title){
+    const link=k==='page'&&/^https?:\/\//i.test(r.URL||'')?`<a class="pagelink" href="${esc(r.URL)}" target="_blank" rel="noopener">Open page</a>`:'';
+    return `<td class="title"><span class="clamp">${esc(v)}</span>${link}</td>`;
+  }
+  if(c.t==='status') return `<td>${v?`<span class="pill tone-${statusMeta(k,v).tone}">${esc(v)}</span>`:''}</td>`;
+  if(c.k==='Priority') return `<td>${v?`<span class="prio p-${esc(String(v).toLowerCase().replace(/[^a-z]/g,''))}">${esc(v)}</span>`:''}</td>`;
+  if(c.t==='date'||c.t==='week') return `<td class="nowrap">${v?esc(fmtDate(v)):'<span class="muted">\u2013</span>'}</td>`;
+  if(c.t==='area') return `<td><span class="clamp">${esc(v)}</span></td>`;
+  if(c.k==='Owner') return `<td class="nowrap">${esc(v.includes('@')?shortName(v):v)}</td>`;
+  return `<td>${esc(v)}</td>`;
+}
+
+/* ================= Daily log ================= */
+function refOptions(){
+  const out=[];
+  for(const k of ['task','req','cr']) state.data[k].forEach(r=>{ if(!isClosed(k,r)) out.push(`<option value="${esc(r[SCHEMA[k].id])}">${esc(titleOf(k,r))}</option>`); });
+  return out.join('');
+}
+function renderLog(){
+  const day=state.day, week=weekOf(day);
+  const days=[...Array(7)].map((_,i)=>addISO(week,i));
+  const entries=logsFor(r=>r.Date===day).sort((a,b)=>String(a['Log ID']).localeCompare(String(b['Log ID']),undefined,{numeric:true}));
+  const showWho=state.person==='all';
+  const cats=listOf('Daily log categories');
+  $('#content').innerHTML=`
+    <div class="strip">
+      <div class="nav3" style="flex:1">
+        <button class="btn ghost arrow" data-act="day-prev" aria-label="Previous week">\u2039</button>
+        <div class="days">${days.map(d=>{ const h=sumH(logsFor(r=>r.Date===d)); return `<button class="day${d===day?' active':''}${h?' has':''}" data-day="${d}"${d===day?' aria-current="date"':''}>${parseISO(d).toLocaleDateString('en-GB',{weekday:'short'})}<b>${parseISO(d).getDate()}</b><i>${h?fmtH(h):'\u2013'}</i></button>`; }).join('')}</div>
+        <button class="btn ghost arrow" data-act="day-next" aria-label="Next week">\u203A</button>
+      </div>
+      <button class="btn sm" data-act="day-today"${day===today()?' disabled':''}>Today</button>
+      ${personSelect()}
+    </div>
+    ${can()?`<div class="quick">
+      <h3>Add to ${fmtDate(day,'day')}</h3>
+      <div class="quick-grid">
+        <div class="wide"><label for="qa_act">What did you work on?</label><input class="inp" id="qa_act" placeholder="e.g. Reviewed OID reissuance rules with ICS" autocomplete="off"></div>
+        <div><label for="qa_mod">Module</label><input class="inp" id="qa_mod" list="dl_mod" value="${esc(state.qaMod||'')}" autocomplete="off"></div>
+        <div><label for="qa_cat">Category</label><select class="inp" id="qa_cat">${cats.map(c=>`<option${c===state.qaCat?' selected':''}>${esc(c)}</option>`).join('')}</select></div>
+        <div><label for="qa_ref">Linked ref</label><input class="inp" id="qa_ref" list="dl_ref" autocomplete="off"></div>
+        <div><label for="qa_hrs">Hours</label><input class="inp" id="qa_hrs" type="number" min="0" step="0.25"></div>
+        <div><button class="btn primary" data-act="log-add">Add entry</button></div>
+      </div>
+      <datalist id="dl_mod">${moduleOptions().map(m=>`<option value="${esc(m)}">`).join('')}</datalist>
+      <datalist id="dl_ref">${refOptions()}</datalist>
+    </div>`:''}
+    ${entries.length?`<div class="table-wrap"><table>
+      <thead><tr><th class="static">Log ID</th><th class="static">Activity</th><th class="static">Module</th><th class="static">Category</th><th class="static">Linked ref</th>${showWho?'<th class="static">Logged by</th>':''}<th class="static num">Hours</th></tr></thead>
+      <tbody>${entries.map(r=>`<tr class="row" tabindex="0" data-open="log:${r._uid}"><td class="ref">${esc(r['Log ID'])}</td><td class="title"><span class="clamp">${esc(r.Activity)}</span>${r.Outcome?`<span class="sub clamp">${esc(r.Outcome)}</span>`:''}${r.Blockers?`<span class="pill tone-bad" style="margin-top:4px">Blocker</span>`:''}</td><td>${esc(r.Module)}</td><td>${esc(r.Category)}</td><td class="nowrap">${esc(r['Linked Ref'])}</td>${showWho?`<td class="nowrap">${esc(shortName(r['Logged By']))}</td>`:''}<td class="num">${r.Hours?fmtH(num(r.Hours,0)):''}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td colspan="${showWho?6:5}">Total for ${fmtDate(day,'day')}</td><td class="num">${fmtH(sumH(entries))}</td></tr></tfoot>
+    </table></div>`:`<div class="empty"><h3>Nothing logged for ${fmtDate(day,'day')}</h3><p>${can()?'Add what you worked on above. Each entry feeds the weekly report.':'No entries for this day yet.'}</p></div>`}`;
+}
+async function addLog(){
+  const act=$('#qa_act').value.trim();
+  if(!act){ $('#qa_act').focus(); toast('Describe what you worked on first.'); return; }
+  const rec={'Log ID':'','Date':state.day,'Activity':act,'Module':$('#qa_mod').value.trim(),'Category':$('#qa_cat').value,'Linked Ref':$('#qa_ref').value.trim(),'Hours':$('#qa_hrs').value,'Outcome':'','Blockers':'','Logged By':state.user.email||''};
+  state.qaMod=rec.Module; state.qaCat=rec.Category;
+  const btn=$('[data-act="log-add"]'); btn.disabled=true; btn.textContent='Adding\u2026';
+  try{ const out=await persist('log',rec,{isNew:true,autoId:true}); renderSide(); renderLog(); $('#qa_act')?.focus(); toast(`Added ${out['Log ID']}`); }
+  catch(e){ btn.disabled=false; btn.textContent='Add entry'; toast(errMsg(e)); }
+}
+function fillModuleFromRef(ref){
+  for(const k of ['task','req','cr']){ const r=state.data[k].find(x=>sameUser(x[SCHEMA[k].id],ref)); if(r && r.Module) return r.Module; }
+  return '';
+}
+
+/* ================= Weekly report ================= */
+function reportPerson(){ return state.person==='all'?'Everyone':(state.person||''); }
+function currentReport(){ return state.reports.find(r=>r['Week Commencing']===state.reportWeek && sameUser(r.Person,reportPerson())); }
+function ensureDraft(){
+  const key=state.reportWeek+'|'+reportPerson();
+  if(!state.reportDraft || state.reportDraft.key!==key){
+    const r=currentReport()||{};
+    state.reportDraft={key,dirty:false,expected:r['Record Updated']||null,'Summary':r['Summary']||'','Risks and Issues':r['Risks and Issues']||'','Plan for Next Week':r['Plan for Next Week']||''};
+  }
+  return state.reportDraft;
+}
+function reportData(){
+  const w=state.reportWeek, end=addISO(w,6), p=state.person;
+  const mine=r=>p==='all'||!p||sameUser(r['Updated By'],p);
+  const logs=logsFor(r=>inWeek(r.Date,w));
+  const byDay=[...Array(7)].map((_,i)=>{ const d=addISO(w,i); return {d,rows:logs.filter(r=>r.Date===d)}; });
+  const mods={}; logs.forEach(r=>{ const m=r.Module||'Unassigned'; mods[m]=(mods[m]||0)+num(r.Hours,0); });
+  const ownerOk=r=>p==='all'||!p||!r.Owner||sameUser(r.Owner,p)||sameUser(r.Owner,shortName(p));
+  const tasks=state.data.task.filter(r=>r['Week Commencing']===w && ownerOk(r));
+  const upd=k=>state.data[k].filter(r=>inWeek(String(r['Record Updated']||''),w) && mine(r));
+  return {
+    w,end,logs,byDay,mods,
+    hours:sumH(logs), days:byDay.filter(d=>d.rows.length).length,
+    done:tasks.filter(r=>isDone('task',r)),
+    open:tasks.filter(r=>!isClosed('task',r) || /carr/i.test(r.Status||'')),
+    cr:upd('cr'), req:upd('req'),
+    pages:state.data.page.filter(r=>inWeek(r['Page Updated On'],w)),
+    blockers:logs.filter(r=>r.Blockers)
+  };
+}
+function paraOrPlaceholder(text,ph){ return text?text.split(/\n+/).map(l=>/^\s*[-*\u2022]\s+/.test(l)?`<li>${esc(l.replace(/^\s*[-*\u2022]\s+/,''))}</li>`:`<p>${esc(l)}</p>`).join('').replace(/(<li>.*?<\/li>)+/g,m=>`<ul>${m}</ul>`):`<p class="placeholder">${ph}</p>`; }
+function reportDocHTML(D,draft){
+  const list=(rows,fn)=>rows.length?`<ul>${rows.map(fn).join('')}</ul>`:'<p>None this week.</p>';
+  const who=state.person==='all'?'Team':shortName(state.person);
+  const modRows=Object.entries(D.mods).sort((a,b)=>b[1]-a[1]);
+  return `
+    <h2>Weekly report</h2>
+    <p class="doc-meta">${esc(state.settings['Project']||'')}, ${fmtDate(D.w)} to ${fmtDate(D.end)}${who?', '+esc(who):''}</p>
+    <h4>Summary</h4>${paraOrPlaceholder(draft['Summary'],'Add a summary in the notes panel.')}
+    <h4>Work by day</h4>
+    ${D.logs.length?D.byDay.filter(d=>d.rows.length).map(d=>`<p class="day-h">${fmtDate(d.d,'day')} (${fmtH(sumH(d.rows))})</p><ul>${d.rows.map(r=>`<li>${esc(r.Activity)}${r.Module||r['Linked Ref']?` <span class="muted">[${esc([r.Module,r['Linked Ref']].filter(Boolean).join(', '))}]</span>`:''}${r.Outcome?`: ${esc(r.Outcome)}`:''}</li>`).join('')}</ul>`).join(''):'<p>No daily log entries this week.</p>'}
+    <h4>Time by module</h4>
+    ${modRows.length?`<table><thead><tr><th>Module</th><th class="num">Hours</th><th class="num">Share</th></tr></thead><tbody>${modRows.map(([m,h])=>`<tr><td>${esc(m)}</td><td class="num">${fmtH(h)}</td><td class="num">${D.hours?Math.round(h/D.hours*100):0}%</td></tr>`).join('')}<tr><td><strong>Total</strong></td><td class="num"><strong>${fmtH(D.hours)}</strong></td><td></td></tr></tbody></table>`:'<p>No hours logged.</p>'}
+    <h4>Tasks completed</h4>${list(D.done,r=>`<li>${esc(r['Task ID'])} ${esc(r.Task)}</li>`)}
+    <h4>Tasks still open</h4>${list(D.open,r=>`<li>${esc(r['Task ID'])} ${esc(r.Task)} <span class="muted">(${esc(r.Status)})</span></li>`)}
+    <h4>Change requests updated</h4>${list(D.cr,r=>`<li>${esc(r['CR Ref'])} ${esc(r.Title)}: ${esc(r.Status)}</li>`)}
+    <h4>Requirements updated</h4>${list(D.req,r=>`<li>${esc(r['Ref No'])} ${esc(r.Title)}: ${esc(r.Status)}</li>`)}
+    <h4>Confluence pages updated</h4>${list(D.pages,r=>`<li>${esc(r['Page Ref'])} ${esc(r['Page Title'])}</li>`)}
+    <h4>Blockers, risks and issues</h4>
+    ${draft['Risks and Issues']?paraOrPlaceholder(draft['Risks and Issues'],''):''}
+    ${D.blockers.length?`<ul>${D.blockers.map(r=>`<li>${esc(r.Blockers)} <span class="muted">(${fmtDate(r.Date,'short')}${r['Linked Ref']?', '+esc(r['Linked Ref']):''})</span></li>`).join('')}</ul>`:(draft['Risks and Issues']?'':'<p>None raised this week.</p>')}
+    <h4>Plan for next week</h4>${paraOrPlaceholder(draft['Plan for Next Week'],'Add next week\u2019s plan in the notes panel.')}`;
+}
+function renderReport(){
+  const D=reportData(), draft=ensureDraft(), rep=currentReport();
+  const stat=(label,val)=>`<div class="kpi" style="cursor:default"><span class="kpi-label">${label}</span><span class="kpi-value">${val}</span></div>`;
+  $('#content').innerHTML=`
+    <div class="strip">
+      <div class="nav3">
+        <button class="btn ghost arrow" data-act="rw-prev" aria-label="Previous week">\u2039</button>
+        <strong>Week of ${fmtDate(D.w)}</strong>
+        <button class="btn ghost arrow" data-act="rw-next" aria-label="Next week">\u203A</button>
+        <button class="btn sm" data-act="rw-this"${D.w===thisWeek()?' disabled':''}>This week</button>
+      </div>
+      ${personSelect()}
+      <span style="flex:1"></span>
+      <button class="btn" data-act="copy-report">Copy report</button>
+      <button class="btn" data-act="print">Print</button>
+    </div>
+    <div class="kpis">
+      ${stat('Hours logged',fmtH(D.hours).replace('h','<small>h</small>'))}
+      ${stat('Days logged',`${D.days}<small> / 5</small>`)}
+      ${stat('Tasks completed',D.done.length)}
+      ${stat('Records updated',D.cr.length+D.req.length+D.pages.length)}
+      ${stat('Blockers raised',D.blockers.length)}
+    </div>
+    <div class="report-layout">
+      <article class="doc" id="reportDoc">${reportDocHTML(D,draft)}</article>
+      <section class="panel notes">
+        <header><h3>Report notes</h3>${rep&&rep['Updated By']?`<span class="sub">Saved by ${esc(shortName(rep['Updated By']))}</span>`:''}</header>
+        <div class="panel-body">
+          <div><label for="rn_sum">Summary</label><textarea id="rn_sum" data-rn="Summary" rows="5"${can()?'':' disabled'} placeholder="Headline progress for the week">${esc(draft['Summary'])}</textarea></div>
+          <div><label for="rn_risk">Risks and issues</label><textarea id="rn_risk" data-rn="Risks and Issues" rows="4"${can()?'':' disabled'} placeholder="Blockers from the daily log are added automatically">${esc(draft['Risks and Issues'])}</textarea></div>
+          <div><label for="rn_plan">Plan for next week</label><textarea id="rn_plan" data-rn="Plan for Next Week" rows="5"${can()?'':' disabled'} placeholder="Start lines with - to make a list">${esc(draft['Plan for Next Week'])}</textarea>
+            ${can()?'<button class="link" data-act="plan-fill" style="margin-top:4px">Add open and next week\u2019s tasks</button>':''}</div>
+          ${can()?`<div class="actions"><button class="btn primary" data-act="save-report">Save notes</button><span class="unsaved" id="rnState">${draft.dirty?'Unsaved changes':''}</span></div>`:''}
+          <p class="hint">Notes are kept on the Weekly Reports sheet, one row per week and person.</p>
+        </div>
+      </section>
+    </div>`;
+}
+function refreshDoc(){ const el=$('#reportDoc'); if(el) el.innerHTML=reportDocHTML(reportData(),ensureDraft()); const s=$('#rnState'); if(s) s.textContent=state.reportDraft.dirty?'Unsaved changes':''; }
+async function saveReportNotes(){
+  const d=ensureDraft();
+  const rep={'Week Commencing':state.reportWeek,'Person':reportPerson(),'Summary':d['Summary'],'Risks and Issues':d['Risks and Issues'],'Plan for Next Week':d['Plan for Next Week']};
+  try{
+    const out=await guarded(()=>api('saveReport',rep,d.expected));
+    const i=state.reports.findIndex(r=>r['Week Commencing']===out['Week Commencing'] && sameUser(r.Person,out.Person));
+    if(i>=0) state.reports[i]=out; else state.reports.push(out);
+    d.dirty=false; d.expected=out['Record Updated'];
+    renderReport(); toast('Saved report notes');
+  }catch(e){}
+}
+function copyReport(){
+  const el=$('#reportDoc'); const range=document.createRange(); range.selectNodeContents(el);
+  const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+  let ok=false; try{ ok=document.execCommand('copy'); }catch(e){}
+  sel.removeAllRanges();
+  toast(ok?'Report copied. Paste it into your email or Word document.':'The browser blocked copying. Select the report text and copy it yourself.');
+}
+function fillPlan(){
+  const d=ensureDraft(), next=addISO(state.reportWeek,7);
+  const p=state.person, ownerOk=r=>p==='all'||!p||!r.Owner||sameUser(r.Owner,p)||sameUser(r.Owner,shortName(p));
+  const lines=state.data.task.filter(r=>!isClosed('task',r) && ownerOk(r) && (r['Week Commencing']===next || r['Week Commencing']===state.reportWeek)).map(r=>`- ${r['Task ID']} ${r.Task}`);
+  const fresh=lines.filter(l=>!d['Plan for Next Week'].includes(l));
+  if(!fresh.length){ toast('No open tasks to add.'); return; }
+  d['Plan for Next Week']=(d['Plan for Next Week']?d['Plan for Next Week'].replace(/\s+$/,'')+'\n':'')+fresh.join('\n');
+  d.dirty=true; $('#rn_plan').value=d['Plan for Next Week']; refreshDoc();
+}
+
+/* ================= Drawer: records ================= */
+let lastFocus=null;
+function openDrawer(focusSel){
+  lastFocus=document.activeElement;
+  $('#scrim').classList.add('open'); $('#drawer').classList.add('open');
+  const el=(focusSel&&$('#drawer '+focusSel))||$('#drawer .body input:not([readonly]):not(.mono):not(:disabled), #drawer .body textarea:not(:disabled)')||$('#drawer .icon-btn');
+  if(el) el.focus();
+}
+function closeDrawer(){
+  $('#scrim').classList.remove('open'); $('#drawer').classList.remove('open');
+  state.editing=null;
+  if(lastFocus&&document.contains(lastFocus)) lastFocus.focus();
+}
+const fid=k=>'f_'+k.replace(/[^a-z0-9]+/gi,'_');
+function fieldHTML(k,f,val,ro){
+  const id=fid(f.k), v=val??'', full=(f.full||f.t==='area')?' full':'';
+  const ph=f.ph?` placeholder="${esc(f.ph)}"`:'', dis=ro?' disabled':'', nm=` id="${id}" name="${esc(f.k)}"`;
+  const label=`<label for="${id}">${esc(f.k)}${f.req&&!ro?'<span class="req" aria-hidden="true">*</span>':''}</label>`;
+  const sel=opts=>{ const o=!v||opts.includes(v)?opts:[...opts,v]; return `<select${nm}${dis}>${f.t==='list'&&!opts.includes('')?'<option value=""></option>':''}${o.map(x=>`<option${x===v?' selected':''}>${esc(x)}</option>`).join('')}</select>`; };
+  let input, hint='';
+  switch(f.t){
+    case 'area': input=`<textarea${nm} rows="${f.rows||3}"${ph}${dis}>${esc(v)}</textarea>`; break;
+    case 'select': input=sel(f.opts); break;
+    case 'status': input=sel(state.statuses[k].map(s=>s.status)); break;
+    case 'list': input=sel(listOf(f.listKey)); break;
+    case 'module': input=`<input${nm} list="dr_mod" value="${esc(v)}" autocomplete="off"${dis}>`; break;
+    case 'ref': input=`<input${nm} list="dr_ref" value="${esc(v)}" autocomplete="off"${ph}${dis}>`; break;
+    case 'date': input=`<input${nm} type="${!v||parseISO(v)?'date':'text'}" value="${esc(v)}"${dis}>`; break;
+    case 'week': input=`<input${nm} type="date" value="${esc(v)}"${dis}>`; hint='Saved as the Monday of the week you pick.'; break;
+    case 'number': input=`<input${nm} type="number" min="0" step="${f.step||1}" value="${esc(v)}"${dis}>`; break;
+    case 'url': input=`<input${nm} type="url" value="${esc(v)}"${ph}${dis}>`; break;
+    case 'id': input=`<input${nm} class="mono" value="${esc(v)}"${dis}>`; if(!ro) hint='Numbered automatically when saved. Type your own to match an existing reference.'; break;
+    default: input=`<input${nm} value="${esc(v)}"${f.ro?' readonly':''}${ph}${dis}>`;
+  }
+  return `<div class="field${full}">${label}${input}${hint?`<span class="hint">${hint}</span>`:''}</div>`;
+}
+function suggestId(k){
+  const pre={cr:'Change request prefix',req:'Requirement prefix',task:'Task prefix',page:'Confluence page prefix',log:'Daily log prefix'}[k];
+  const p=state.settings[pre]||'', pad={cr:2,req:3,task:3,page:3,log:4}[k]; let max=0;
+  state.data[k].forEach(r=>{ const v=String(r[SCHEMA[k].id]||''); if(v.toLowerCase().startsWith(p.toLowerCase())){ const n=parseInt(v.slice(p.length),10); if(!isNaN(n)&&n>max) max=n; } });
+  return p+String(max+1).padStart(pad,'0');
+}
+function newRow(k,preset){
+  const r={};
+  SCHEMA[k].fields.forEach(f=>{
+    r[f.k]=f.t==='id'?suggestId(k):f.def==='today'?today():f.def==='week'?(state.week==='all'?thisWeek():state.week):f.def==='day'?state.day:f.def==='me'?(state.user.email||''):
+      f.t==='status'?(state.statuses[k][0]||{}).status||'':f.t==='list'?(listOf(f.listKey)[0]||''):(f.def||'');
+  });
+  if(k==='log') r['Logged By']=state.user.email||'';
+  return Object.assign(r,preset||{});
+}
+function openEditor(k,uid,preset,focusKey){
+  const s=SCHEMA[k], ro=!can();
+  const row=uid!=null?state.data[k].find(r=>r._uid===uid):null;
+  if(uid!=null && !row) return;
+  const draft=row?{...row,...(preset||{})}:newRow(k,preset);
+  state.editing={k,uid:row?row._uid:null,suggested:row?null:draft[s.id]};
+  $('#drawer').innerHTML=`
+    <header>
+      <div><h3 class="${row?'ref':''}">${row?esc(row[s.id]||'Untitled'):`New ${s.one}`}</h3>${row&&row['Record Updated']?`<p class="meta">Last edited ${esc(whenText(row['Record Updated']))}${row['Updated By']?' by '+esc(shortName(row['Updated By'])):''}</p>`:''}</div>
+      <button class="icon-btn" data-act="close" aria-label="Close">\u00D7</button>
+    </header>
+    <form class="body" id="editForm" novalidate>
+      <div class="form-grid">${s.fields.map(f=>fieldHTML(k,f,draft[f.k],ro)).join('')}</div>
+      <datalist id="dr_mod">${moduleOptions().map(m=>`<option value="${esc(m)}">`).join('')}</datalist>
+      <datalist id="dr_ref">${refOptions()}</datalist>
+      <p class="form-error" id="formError" role="alert"></p>
+    </form>
+    <footer>${ro?'<button class="btn" data-act="close">Close</button><span class="hint" style="margin:auto 0">You have view access to this sheet.</span>':`
+      <button class="btn primary" data-act="save-row">Save ${s.one}</button>
+      <button class="btn" data-act="close">Cancel</button>
+      ${row?'<button class="btn danger" data-act="delete-row">Delete</button>':''}`}
+    </footer>`;
+  $('#drawer').setAttribute('aria-label',row?`${ro?'View':'Edit'} ${row[s.id]}`:`New ${s.one}`);
+  openDrawer(focusKey?'#'+fid(focusKey):null);
+}
+async function saveRow(){
+  const {k,uid,suggested}=state.editing, s=SCHEMA[k], vals={};
+  $('#editForm').querySelectorAll('[name]').forEach(el=>{ vals[el.name]=el.value.trim(); });
+  s.fields.forEach(f=>{ if(f.t==='week'&&vals[f.k]&&parseISO(vals[f.k])) vals[f.k]=weekOf(vals[f.k]); });
+  const err=m=>{ $('#formError').textContent=m; };
+  const missing=s.fields.filter(f=>f.req&&!vals[f.k]).map(f=>f.k);
+  if(missing.length) return err(`Fill in ${missing.join(', ')} before saving.`);
+  if(state.data[k].some(r=>r._uid!==uid && vals[s.id] && sameUser(r[s.id],vals[s.id]) && !(uid==null&&vals[s.id]===suggested))) return err(`${vals[s.id]} is already used. Choose a different reference.`);
+  const row=uid!=null?state.data[k].find(r=>r._uid===uid):null;
+  const rec=row?{...row,...vals}:vals;
+  const opts=row?{origId:row[s.id],expected:row['Record Updated']||''}:{isNew:true,autoId:!vals[s.id]||vals[s.id]===suggested};
+  const btn=$('[data-act="save-row"]'); btn.disabled=true; btn.textContent='Saving\u2026';
+  try{
+    const out=await persist(k,rec,opts);
+    closeDrawer();
+    if(k==='task'&&state.week!=='all'&&out['Week Commencing']&&out['Week Commencing']!==state.week) state.week=out['Week Commencing'];
+    renderSide(); renderContent(); toast(`Saved ${out[s.id]}`);
+  }catch(e){ err(errMsg(e)); btn.disabled=false; btn.textContent=`Save ${s.one}`; }
+}
+async function deleteRow(){
+  const {k,uid}=state.editing, s=SCHEMA[k];
+  const r=state.data[k].find(x=>x._uid===uid); if(!r) return;
+  if(!confirm(`Delete ${r[s.id]}? It will be removed from the Google Sheet for everyone.`)) return;
+  try{
+    await guarded(()=>api('deleteRecord',k,r[s.id],r['Record Updated']||''));
+    state.data[k]=state.data[k].filter(x=>x._uid!==uid);
+    closeDrawer(); renderSide(); renderContent(); toast(`Deleted ${r[s.id]}`);
+  }catch(e){ $('#formError').textContent=errMsg(e); }
+}
+
+/* ================= Drawer: settings ================= */
+const GENERAL=[['Project','text',1],['Change request prefix','text'],['Requirement prefix','text'],['Task prefix','text'],['Confluence page prefix','text'],['Daily log prefix','text'],['Due soon window (days)','number'],['Daily target hours','number']];
+const LISTS=[['Modules','Shown as suggestions in the Module field and filters.'],['Task categories','Options for the Category field on weekly tasks.'],['Daily log categories','Options for the Category field in the daily log.']];
+function openSettings(){
+  const cfg={settings:{...state.settings},statuses:{}};
+  for(const k of Object.keys(REG_LABEL)) cfg.statuses[k]=state.statuses[k].map(s=>({...s,orig:s.status}));
+  state.editing={settings:true,cfg,tab:'statuses',reg:'cr'};
+  renderSettings(); openDrawer();
+}
+function renderSettings(){
+  const E=state.editing, S=E.cfg.settings;
+  let body='';
+  if(E.tab==='general'){
+    body=`<div class="form-grid">${GENERAL.map(([k,t,full])=>`<div class="field${full?' full':''}"><label for="${fid(k)}">${esc(k)}</label><input id="${fid(k)}" data-cfg="${esc(k)}" type="${t}"${t==='number'?' min="0" step="0.5"':''} value="${esc(S[k]||'')}"></div>`).join('')}</div>
+      <p class="hint" style="margin-top:14px">Prefix changes apply to new references only.</p>`;
+  } else if(E.tab==='lists'){
+    body=`<div class="form-grid">${LISTS.map(([k,h])=>`<div class="field full"><label for="${fid(k)}">${esc(k)}</label><textarea id="${fid(k)}" data-cfg="${esc(k)}" data-list="1" rows="${k==='Modules'?8:6}">${esc(String(S[k]||'').split(/[;\n]/).map(x=>x.trim()).filter(Boolean).join('\n'))}</textarea><span class="hint">One per line. ${h}</span></div>`).join('')}</div>`;
+  } else {
+    const list=E.cfg.statuses[E.reg];
+    const use={}; state.data[E.reg].forEach(r=>{ use[r.Status]=(use[r.Status]||0)+1; });
+    body=`<div class="seg" role="tablist">${Object.entries(REG_LABEL).map(([k,l])=>`<button type="button" class="${E.reg===k?'on':''}" data-sreg="${k}">${l}</button>`).join('')}</div>
+      <div class="st-head"><span></span><span>Status</span><span>Colour</span><span>Counts as</span><span></span></div>
+      ${list.map((s,i)=>`<div class="st-row">
+        <div class="st-move"><button type="button" data-smove="${i}:-1" aria-label="Move up"${i===0?' disabled':''}>\u25B2</button><button type="button" data-smove="${i}:1" aria-label="Move down"${i===list.length-1?' disabled':''}>\u25BC</button></div>
+        <div><input data-si="${i}" data-sf="status" value="${esc(s.status)}" aria-label="Status name"><span class="st-use">${use[s.orig]?`${use[s.orig]} record${use[s.orig]===1?'':'s'}`:''}${s.orig&&s.orig!==s.status&&use[s.orig]?', will be renamed':''}</span></div>
+        <div class="st-col"><i class="sw fill-${TONES[s.colour]||'muted'}"></i><select data-si="${i}" data-sf="colour" aria-label="Colour">${Object.keys(TONES).map(c=>`<option${c===s.colour?' selected':''}>${c}</option>`).join('')}</select></div>
+        <select data-si="${i}" data-sf="type" aria-label="Counts as">${TYPES.map(t=>`<option${t===s.type?' selected':''}>${t}</option>`).join('')}</select>
+        <button type="button" class="icon-btn" style="font-size:18px" data-sdel="${i}" aria-label="Remove ${esc(s.status)}">\u00D7</button>
+      </div>`).join('')}
+      <button type="button" class="btn sm" data-sadd style="margin-top:12px">Add status</button>
+      <p class="hint" style="margin-top:14px">The first status is used for new records. <b>Open</b> statuses appear in the default lists. <b>Done</b> counts as completed on the dashboard and weekly report. <b>Closed</b> is finished without being completed. Renaming a status updates every record that uses it.</p>`;
+  }
+  $('#drawer').innerHTML=`
+    <header><div><h3>Settings</h3><p class="meta">Saved to the Settings and Statuses sheets, shared by everyone.</p></div><button class="icon-btn" data-act="close" aria-label="Close">\u00D7</button></header>
+    <form class="body" id="editForm" novalidate>
+      <div class="seg">${[['statuses','Statuses'],['lists','Modules and lists'],['general','General']].map(([t,l])=>`<button type="button" class="${E.tab===t?'on':''}" data-stab="${t}">${l}</button>`).join('')}</div>
+      ${body}
+      <p class="form-error" id="formError" role="alert"></p>
+    </form>
+    <footer><button class="btn primary" data-act="save-settings">Save settings</button><button class="btn" data-act="close">Cancel</button></footer>`;
+  $('#drawer').setAttribute('aria-label','Settings');
+}
+async function saveSettings(){
+  const cfg=state.editing.cfg, list=[];
+  for(const [k,label] of Object.entries(REG_LABEL)){
+    const seen=new Set();
+    for(const s of cfg.statuses[k]){
+      const n=s.status.trim();
+      if(!n){ $('#formError').textContent=`Every ${label.toLowerCase()} status needs a name.`; return; }
+      if(seen.has(n.toLowerCase())){ $('#formError').textContent=`"${n}" appears twice in ${label.toLowerCase()}.`; return; }
+      seen.add(n.toLowerCase()); list.push({register:label,status:n,colour:s.colour,type:s.type,orig:s.orig||''});
+    }
+    if(!cfg.statuses[k].length){ $('#formError').textContent=`${label} needs at least one status.`; return; }
+  }
+  const btn=$('[data-act="save-settings"]'); btn.disabled=true; btn.textContent='Saving\u2026';
+  try{
+    const res=await guarded(()=>api('saveConfig',cfg.settings,list));
+    applyAll(res); closeDrawer(); renderAll(); toast('Saved settings');
+  }catch(e){ $('#formError').textContent=errMsg(e); btn.disabled=false; btn.textContent='Save settings'; }
+}
+
+/* ================= Actions ================= */
+async function pageAction(act,uid){
+  const r=state.data.page.find(x=>x._uid===uid); if(!r) return;
+  const t=today();
+  if(act==='pg-flag'){ openEditor('page',uid,{'Needs Update':'Yes','Last Checked On':t},'What Needs Changing'); return; }
+  const rec={...r,'Last Checked On':t};
+  if(act==='pg-updated'){
+    const what=r['What Needs Changing'];
+    if(what) rec['Notes']=(r['Notes']?r['Notes']+'\n':'')+`${t}: updated. ${what}`;
+    Object.assign(rec,{'Page Updated On':t,'Needs Update':'No','What Needs Changing':''});
+  }
+  try{
+    await persist('page',rec,{origId:r['Page Ref'],expected:r['Record Updated']||''});
+    renderSide(); renderTable();
+    toast(act==='pg-updated'?`${r['Page Ref']} marked as updated today`:`${r['Page Ref']} checked. Next check in ${parseInt(r['Review Every (days)'],10)||7} days.`);
+  }catch(e){ toast(errMsg(e)); }
+}
+async function carryOver(){
+  const next=addISO(state.week,7);
+  const open=state.data.task.filter(r=>r['Week Commencing']===state.week && !isClosed('task',r));
+  if(!open.length){ toast('Nothing to carry over. Every task this week is finished.'); return; }
+  if(!confirm(`Carry ${open.length} unfinished task${open.length===1?'':'s'} into the week of ${fmtDate(next)}? They will be marked as carried over in this week.`)) return;
+  try{
+    const res=await guarded(()=>api('carryOver',state.week,open.map(r=>r['Task ID'])));
+    state.data.task=res.rows.map(r=>({...r,_uid:nextUid()}));
+    state.week=next; renderSide(); renderTable();
+    toast(`Carried ${res.moved} task${res.moved===1?'':'s'} into the week of ${fmtDate(next)}`);
+  }catch(e){}
+}
+
+document.addEventListener('click',e=>{
+  const t=e.target;
+  if(t.closest('a')) return;
+  const sEl=state.editing&&state.editing.settings?t.closest('[data-stab],[data-sreg],[data-smove],[data-sdel],[data-sadd]'):null;
+  if(sEl){
+    const E=state.editing, list=E.cfg.statuses[E.reg];
+    if(sEl.dataset.stab) E.tab=sEl.dataset.stab;
+    else if(sEl.dataset.sreg) E.reg=sEl.dataset.sreg;
+    else if(sEl.dataset.smove){ const [i,d]=sEl.dataset.smove.split(':').map(Number); const j=i+d; [list[i],list[j]]=[list[j],list[i]]; }
+    else if(sEl.dataset.sdel!=null){ const i=+sEl.dataset.sdel, s=list[i]; const n=state.data[E.reg].filter(r=>r.Status===s.orig).length;
+      if(n&&!confirm(`${n} record${n===1?' uses':'s use'} "${s.orig}". They keep that text but it will show without a colour. Remove it anyway?`)) return;
+      list.splice(i,1); }
+    else if(sEl.hasAttribute('data-sadd')){ list.push({status:'',colour:'Grey',type:'Open',orig:''}); renderSettings(); $('#drawer .st-row:last-of-type input')?.focus(); return; }
+    renderSettings(); return;
+  }
+  const btn=t.closest('[data-act]');
+  if(btn){
+    e.preventDefault();
+    const act=btn.dataset.act, k=state.view;
+    switch(act){
+      case 'refresh': if(!$('#drawer').classList.contains('open')) load(false); break;
+      case 'preview': enterApp('preview'); break;
+      case 'signin': doSignIn(); break;
+      case 'connect': doConnect(); break;
+      case 'resignin': signIn().then(()=>{ state.needSignin=false; renderTop(); load(true); }).catch(err=>toast(errMsg(err))); break;
+      case 'copy-link': copyTeamLink(); break;
+      case 'switch-sheet': gate('pick'); break;
+      case 'sign-out': signOut(); break;
+      case 'settings': openSettings(); break;
+      case 'add': openEditor(k,null); break;
+      case 'close': closeDrawer(); break;
+      case 'save-row': saveRow(); break;
+      case 'delete-row': deleteRow(); break;
+      case 'save-settings': saveSettings(); break;
+      case 'clear-filters': Object.assign(state.filters[k],{q:'',module:'',status:'',showClosed:true}); renderRegister(); break;
+      case 'week-prev': state.week=addISO(state.week,-7); renderTable(); break;
+      case 'week-next': state.week=addISO(state.week,7); renderTable(); break;
+      case 'week-this': state.week=thisWeek(); renderTable(); break;
+      case 'week-all': state.week='all'; renderTable(); break;
+      case 'carry': carryOver(); break;
+      case 'pg-checked': case 'pg-flag': case 'pg-updated': pageAction(act,+btn.dataset.uid); break;
+      case 'day-prev': state.day=addISO(state.day,-7); renderLog(); break;
+      case 'day-next': state.day=addISO(state.day,7); renderLog(); break;
+      case 'day-today': state.day=today(); renderLog(); break;
+      case 'log-add': addLog(); break;
+      case 'rw-prev': case 'rw-next': case 'rw-this':
+        if(state.reportDraft&&state.reportDraft.dirty&&!confirm('Your report notes are not saved. Leave this week anyway?')) break;
+        state.reportWeek=act==='rw-this'?thisWeek():addISO(state.reportWeek,act==='rw-prev'?-7:7); state.reportDraft=null; renderReport(); break;
+      case 'save-report': saveReportNotes(); break;
+      case 'copy-report': copyReport(); break;
+      case 'print': window.print(); break;
+      case 'plan-fill': fillPlan(); break;
+    }
+    return;
+  }
+  const dayBtn=t.closest('[data-day]');
+  if(dayBtn){ state.day=dayBtn.dataset.day; if(state.view!=='log') setView('log'); else renderLog(); return; }
+  const nav=t.closest('[data-view]');
+  if(nav){
+    const v=nav.dataset.view;
+    if(state.view==='report'&&v!=='report'&&state.reportDraft&&state.reportDraft.dirty&&!confirm('Your report notes are not saved. Leave anyway?')) return;
+    const f={}; if(nav.dataset.status!=null) f.status=nav.dataset.status; if(nav.dataset.module!=null) f.module=nav.dataset.module;
+    if(v==='task'&&nav.classList.contains('kpi')) state.week=thisWeek();
+    setView(v,Object.keys(f).length?f:null); return;
+  }
+  const th=t.closest('th[data-sort]');
+  if(th){ const v=state.filters[state.view], col=th.dataset.sort; v.sort=!v.sort||v.sort.col!==col?{col,dir:1}:v.sort.dir===1?{col,dir:-1}:null; renderTable(); return; }
+  const open=t.closest('[data-open]');
+  if(open){ const [k,uid]=open.dataset.open.split(':'); openEditor(k,+uid); }
+});
+document.addEventListener('input',e=>{
+  const t=e.target;
+  if(t.dataset.f!=null){ const v=state.filters[state.view]; v[t.dataset.f]=t.type==='checkbox'?t.checked:t.value; renderTable(); return; }
+  if(t.dataset.rn){ const d=ensureDraft(); d[t.dataset.rn]=t.value; d.dirty=true; refreshDoc(); return; }
+  if(t.dataset.cfg){ state.editing.cfg.settings[t.dataset.cfg]=t.dataset.list?t.value.split('\n').map(x=>x.trim()).filter(Boolean).join('; '):t.value.trim(); return; }
+  if(t.dataset.si!=null){ const E=state.editing; E.cfg.statuses[E.reg][+t.dataset.si][t.dataset.sf]=t.value; if(t.tagName==='SELECT') renderSettings(); return; }
+});
+document.addEventListener('change',e=>{
+  const t=e.target;
+  if(t.matches('[data-person]')){
+    if(state.view==='report'&&state.reportDraft&&state.reportDraft.dirty&&!confirm('Your report notes are not saved. Switch anyway?')){ t.value=state.person; return; }
+    state.person=t.value; state.reportDraft=null; renderSide(); renderContent(); return;
+  }
+  if(t.id==='qa_ref'&&t.value&&!$('#qa_mod').value){ $('#qa_mod').value=fillModuleFromRef(t.value); }
+  if(t.id===fid('Linked Ref')){ const m=$('#'+fid('Module')); if(m&&!m.value) m.value=fillModuleFromRef(t.value); }
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&$('#drawer').classList.contains('open')){ closeDrawer(); return; }
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){
+    e.preventDefault();
+    if(state.editing&&state.editing.settings) saveSettings(); else if(state.editing&&can()) saveRow(); else if(state.view==='report'&&can()) saveReportNotes();
+    return;
+  }
+  if(e.key==='Enter'&&e.target.matches('tr.row')){ const [k,uid]=e.target.dataset.open.split(':'); openEditor(k,+uid); return; }
+  if(e.key==='Enter'&&e.target.id==='sheetLink'){ e.preventDefault(); doConnect(); return; }
+  if(e.key==='Enter'&&e.target.closest('.quick')&&e.target.tagName==='INPUT'){ e.preventDefault(); addLog(); return; }
+  if(e.key==='Enter'&&e.target.closest('#editForm')&&e.target.tagName==='INPUT'){ e.preventDefault(); if(state.editing.settings) saveSettings(); else if(can()) saveRow(); }
+});
+window.addEventListener('beforeunload',e=>{ if(state.sync.busy||(state.reportDraft&&state.reportDraft.dirty)){ e.preventDefault(); e.returnValue=''; } });
+setInterval(()=>{
+  if(state.mode!=='sheets'||state.needSignin||document.visibilityState!=='visible'||state.sync.busy||state.loading) return;
+  if($('#drawer').classList.contains('open')||(state.reportDraft&&state.reportDraft.dirty)) return;
+  const a=document.activeElement; if(a&&a.closest&&a.closest('#content')&&/INPUT|TEXTAREA|SELECT/.test(a.tagName)) return;
+  load(true);
+},90000);
+
+/* ================= Guilloche ================= */
+function drawGuilloche(){
+  const W=1200,H=140; let out='';
+  for(let fam=0;fam<2;fam++) for(let i=0;i<13;i++){
+    let d='';
+    for(let x=0;x<=W;x+=5){ const t=x/W*Math.PI*2, env=0.5+0.5*Math.sin(t*1.25+fam*Math.PI+0.9);
+      d+=(x?'L':'M')+x+' '+(H/2+H*0.38*(0.25+0.75*env)*Math.sin(t*6+i*0.2+fam*Math.PI*0.5)).toFixed(2); }
+    out+=`<path d="${d}" vector-effect="non-scaling-stroke"/>`;
+  }
+  $('.guilloche').innerHTML=`<g fill="none" stroke="currentColor" stroke-width="0.8">${out}</g>`;
+  let r='';
+  for(let j=0;j<9;j++){ let d=''; for(let s=0;s<=360;s+=2){ const t=s/180*Math.PI, a=t+j*Math.PI/27, rad=14+6*Math.cos(7*t); d+=(s?'L':'M')+(rad*Math.cos(a)).toFixed(2)+' '+(rad*Math.sin(a)).toFixed(2); } r+=`<path d="${d}Z"/>`; }
+  $('.rosette').innerHTML=`<g fill="none" stroke="currentColor" stroke-width="0.7">${r}<circle r="21.5"/><circle r="5.5"/></g>`;
+}
+
+/* ================= Preview backend (sample data) ================= */
+const Mock=(function(){
+  const t=today(), w=thisWeek(), d=n=>addISO(t,n), wd=n=>addISO(w,n);
+  const me='tedros.fiseha@example.com', other='hana.b@example.com';
+  const st=(s,ago)=>{ const x=new Date(); x.setHours(x.getHours()-ago); return iso(x)+' '+pad2(x.getHours())+':'+pad2(x.getMinutes())+':00'; };
+  const DB={
+    settings:{'Project':'ET1240 EPass 2.0','Change request prefix':'CR-','Requirement prefix':'ET1240-REQ-','Task prefix':'TSK-','Confluence page prefix':'CNF-','Daily log prefix':'LOG-',
+      'Modules':'Passport Services; Origin ID (OID); eGate; PISCES; Watchlist 2.0; Legacy / EPass sync; Payment Gateway; Laissez Passer; Golden ID; General',
+      'Task categories':'Documentation; Requirements; Meeting; Review; Follow-up; Testing support; Admin',
+      'Daily log categories':'Requirements analysis; Documentation; Meeting; Stakeholder follow-up; Review; Testing support; Admin','Due soon window (days)':'2','Daily target hours':'8'},
+    statuses:[['Change requests','On hold','Amber','Open'],['Change requests','Awaiting feasibility','Amber','Open'],['Change requests','Awaiting ICS decision','Amber','Open'],['Change requests','Approved, not scheduled','Teal','Open'],['Change requests','Scheduled','Teal','Open'],['Change requests','Implemented','Green','Done'],['Change requests','Rejected','Grey','Closed'],
+      ['Requirements','Open','Teal','Open'],['Requirements','In analysis','Teal','Open'],['Requirements','Awaiting ICS confirmation','Amber','Open'],['Requirements','Deferred','Amber','Open'],['Requirements','Confirmed','Green','Done'],['Requirements','Closed','Grey','Closed'],
+      ['Weekly tasks','Not started','Grey','Open'],['Weekly tasks','In progress','Teal','Open'],['Weekly tasks','Blocked','Red','Open'],['Weekly tasks','Done','Green','Done'],['Weekly tasks','Carried over','Grey','Closed'],['Weekly tasks','Cancelled','Grey','Closed']]
+      .map(([register,status,colour,type])=>({register,status,colour,type})),
+    data:{
+      cr:[
+        {'CR Ref':'CR-01','Title':'Underage OID reissuance after foreign passport renewal','Module':'Origin ID (OID)','Status':'Awaiting ICS decision','Priority':'High','Date Raised':d(-20),'Reason on Hold':'Record matching rule for renewed foreign passports not agreed','Record Updated':st(0,3),'Updated By':me},
+        {'CR Ref':'CR-02','Title':'Locate minor OID records by parent passport','Module':'Origin ID (OID)','Status':'On hold','Priority':'High','Date Raised':d(-18),'Reason on Hold':'Depends on CR-01 outcome','Record Updated':st(0,30),'Updated By':me},
+        {'CR Ref':'CR-03','Title':'Walk-in QR payment through Flygate','Module':'Payment Gateway','Status':'Awaiting feasibility','Priority':'Medium','Date Raised':d(-12),'Reason on Hold':'Vendor feasibility review','Record Updated':st(0,50),'Updated By':other},
+        {'CR Ref':'CR-04','Title':'Reservation hold expiry before payment','Module':'Passport Services','Status':'Scheduled','Priority':'High','Date Raised':d(-9),'Target Release':'R2.3','Record Updated':st(0,70),'Updated By':me},
+        {'CR Ref':'CR-05','Title':'Disaster Fund contribution on receipts','Module':'Payment Gateway','Status':'Implemented','Priority':'Low','Date Raised':d(-40),'Record Updated':st(0,200),'Updated By':other}],
+      req:[
+        {'Ref No':'ET1240-REQ-001','Title':'Golden ID validity period','Module':'Golden ID','Type':'Functional','Status':'Awaiting ICS confirmation','Priority':'Must','Owner':me,'Stakeholder':'ICS Legal','Date Raised':d(-30),'Due Date':d(-2),'Record Updated':st(0,5),'Updated By':me},
+        {'Ref No':'ET1240-REQ-002','Title':'Concurrent document holding rules','Module':'Golden ID','Status':'Open','Priority':'Must','Due Date':d(3),'Record Updated':st(0,26),'Updated By':me},
+        {'Ref No':'ET1240-REQ-003','Title':'Foreign passport identity resolution','Module':'Origin ID (OID)','Status':'In analysis','Priority':'Must','Due Date':d(6),'Record Updated':st(0,28),'Updated By':me},
+        {'Ref No':'ET1240-REQ-004','Title':'Watchlist 2.0 enrolment roles','Module':'Watchlist 2.0','Status':'Open','Priority':'Should','Due Date':d(12),'Record Updated':st(0,90),'Updated By':other},
+        {'Ref No':'ET1240-REQ-005','Title':'eGate crossing event logging','Module':'eGate','Status':'Confirmed','Priority':'Must','Record Updated':st(0,100),'Updated By':me}],
+      task:[
+        {'Task ID':'TSK-001','Task':'Draft weekly progress report','Week Commencing':w,'Owner':me,'Module':'General','Category':'Documentation','Status':'In progress','Priority':'High','Due Date':wd(4)},
+        {'Task ID':'TSK-002','Task':'Minutes for Watchlist 2.0 scoping','Week Commencing':w,'Owner':me,'Module':'Watchlist 2.0','Category':'Meeting','Status':'Done','Priority':'Medium'},
+        {'Task ID':'TSK-003','Task':'Update FRS section on OID edge cases','Week Commencing':w,'Owner':me,'Module':'Origin ID (OID)','Category':'Requirements','Status':'Blocked','Priority':'High','Due Date':d(1),'Linked Ref':'CR-01'},
+        {'Task ID':'TSK-004','Task':'Legacy / EPass sync discussion prep','Week Commencing':w,'Owner':other,'Module':'Legacy / EPass sync','Category':'Meeting','Status':'Not started','Priority':'Medium'}],
+      page:[
+        {'Page Ref':'CNF-001','Page Title':'OID processing rules','URL':'https://confluence.example.com/oid','Module':'Origin ID (OID)','Owner':'Tedros','Review Every (days)':'7','Needs Update':'Yes','Last Checked On':d(-3),'What Needs Changing':'Add CR-01 decision','Record Updated':st(0,8),'Updated By':me},
+        {'Page Ref':'CNF-002','Page Title':'eGate PoC functional spec','Module':'eGate','Owner':'Tedros','Review Every (days)':'14','Needs Update':'No','Last Checked On':d(-20)},
+        {'Page Ref':'CNF-003','Page Title':'Payment gateway integration','Module':'Payment Gateway','Owner':'Hana','Review Every (days)':'7','Needs Update':'No','Last Checked On':d(-6)},
+        {'Page Ref':'CNF-004','Page Title':'Golden ID specification','Module':'Golden ID','Owner':'Tedros','Review Every (days)':'30','Needs Update':'No','Last Checked On':d(-2),'Page Updated On':d(-2)}],
+      log:[]
+    },
+    reports:[]
+  };
+  let n=1; const L=(day,act,mod,cat,ref,h,by,extra)=>DB.data.log.push({'Log ID':'LOG-'+String(n++).padStart(4,'0'),'Date':day,'Activity':act,'Module':mod,'Category':cat,'Linked Ref':ref,'Hours':String(h),'Logged By':by||me,'Record Updated':st(0,100-n),'Updated By':by||me,...(extra||{})});
+  L(wd(0),'Walked ICS through OID reissuance edge cases','Origin ID (OID)','Stakeholder follow-up','CR-01',2.5,me,{'Outcome':'Agreed to escalate matching rule'});
+  L(wd(0),'Drafted Watchlist 2.0 scoping minutes','Watchlist 2.0','Documentation','TSK-002',1.5);
+  L(wd(0),'Reviewed Golden ID validity options','Golden ID','Requirements analysis','ET1240-REQ-001',3);
+  L(wd(1),'Legacy / EPass sync meeting','Legacy / EPass sync','Meeting','',2,other);
+  L(wd(1),'Wrote problem statements for reservation expiry','Passport Services','Requirements analysis','CR-04',4,me,{'Blockers':'Waiting for gateway logs from vendor'});
+  L(wd(2),'FRS OID section rewrite','Origin ID (OID)','Documentation','TSK-003',5);
+  L(wd(2),'Payment gateway walkthrough with finance','Payment Gateway','Meeting','CR-03',1.5);
+  DB.data.log=DB.data.log.filter(r=>r.Date<=t);
+  const idf={cr:'CR Ref',req:'Ref No',task:'Task ID',page:'Page Ref',log:'Log ID'};
+  const pre={cr:['Change request prefix',2],req:['Requirement prefix',3],task:['Task prefix',3],page:['Confluence page prefix',3],log:['Daily log prefix',4]};
+  const stampNow=()=>{ const x=new Date(); return iso(x)+' '+pad2(x.getHours())+':'+pad2(x.getMinutes())+':'+pad2(x.getSeconds()); };
+  const nid=k=>{ const p=DB.settings[pre[k][0]]; let m=0; DB.data[k].forEach(r=>{ const v=String(r[idf[k]]); if(v.startsWith(p)){ const q=parseInt(v.slice(p.length),10); if(q>m) m=q; } }); return p+String(m+1).padStart(pre[k][1],'0'); };
+  const find=(k,id)=>DB.data[k].findIndex(r=>sameUser(r[idf[k]],id));
+  return {
+    getAll(){ return {user:{email:me,canEdit:true},settings:DB.settings,statuses:DB.statuses,data:DB.data,reports:DB.reports,today:t}; },
+    saveRecord(k,rec,o){
+      let i=-1;
+      if(!o.isNew){ i=find(k,o.origId||rec[idf[k]]); if(i<0) throw new Error('That record is no longer in the sheet.');
+        if(o.expected!=null&&String(DB.data[k][i]['Record Updated']||'')!==String(o.expected)) throw new Error('CONFLICT|Changed by someone else. Refresh first.'); }
+      if(o.isNew&&(o.autoId||!rec[idf[k]])) rec[idf[k]]=nid(k);
+      const c=find(k,rec[idf[k]]); if(c>=0&&c!==i) throw new Error(rec[idf[k]]+' is already used. Choose a different reference.');
+      rec['Record Updated']=stampNow(); rec['Updated By']=me; if(k==='log'&&!rec['Logged By']) rec['Logged By']=me;
+      if(i>=0) DB.data[k][i]={...DB.data[k][i],...rec}; else DB.data[k].push(rec);
+      return i>=0?DB.data[k][i]:rec;
+    },
+    deleteRecord(k,id){ const i=find(k,id); if(i>=0) DB.data[k].splice(i,1); return true; },
+    carryOver(week,ids){ let moved=0; const nx=addISO(week,7);
+      ids.forEach(id=>{ const i=find('task',id); if(i<0) return; const r=DB.data.task[i]; const cp={...r,'Task ID':'','Week Commencing':nx,'Carried From':id,'Record Updated':stampNow(),'Updated By':me}; r.Status='Carried over'; r['Record Updated']=stampNow(); cp['Task ID']=nid('task'); DB.data.task.push(cp); moved++; });
+      return {moved,rows:DB.data.task}; },
+    saveConfig(s,list){ DB.settings=s;
+      list.forEach(x=>{ if(x.orig&&x.orig!==x.status){ const k=Object.keys(REG_LABEL).find(k=>REG_LABEL[k]===x.register); DB.data[k].forEach(r=>{ if(r.Status===x.orig) r.Status=x.status; }); } });
+      DB.statuses=list.map(({register,status,colour,type})=>({register,status,colour,type})); return this.getAll(); },
+    saveReport(rep){ rep['Record Updated']=stampNow(); rep['Updated By']=me;
+      const i=DB.reports.findIndex(r=>r['Week Commencing']===rep['Week Commencing']&&sameUser(r.Person,rep.Person));
+      if(i>=0) DB.reports[i]=rep; else DB.reports.push(rep); return rep; }
+  };
+})();
+
+/* ================= Start ================= */
+state.week=thisWeek(); state.day=today(); state.reportWeek=thisWeek();
+drawGuilloche();
+(function start(){
+  const params=new URLSearchParams(location.search);
+  let stored=''; try{ stored=localStorage.getItem('ba_sheet')||''; }catch(e){}
+  const fromUrl=sheetIdFrom(params.get('sheet')||'');
+  G.id=fromUrl||stored||sheetIdFrom(CONFIG.SHEET_URL);
+  if(fromUrl){ try{ localStorage.setItem('ba_sheet',fromUrl); }catch(e){} }
+  if(params.has('preview')){ enterApp('preview'); return; }
+  if(!CONFIG.CLIENT_ID){ gate('setup'); return; }
+  gate('signin');
+})();
+})();
+</script>
+</body>
+</html>
