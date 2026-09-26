@@ -197,10 +197,15 @@ tr.row:focus-visible{outline:2px solid var(--teal);outline-offset:-2px}
 .day.active b{color:var(--teal)}
 .quick{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
 .quick h3{margin:0 0 10px;font-size:15px}
-.quick-grid{display:grid;grid-template-columns:minmax(220px,2.6fr) minmax(130px,1.2fr) minmax(130px,1.2fr) minmax(120px,1fr) 80px auto;gap:8px;align-items:end}
+.quick-grid{display:grid;gap:8px;align-items:end}
+.quick-grid.r1{grid-template-columns:minmax(200px,1.4fr) minmax(260px,2.6fr);margin-bottom:8px}
+.quick-grid.r2{grid-template-columns:repeat(4,minmax(120px,1fr)) 80px auto}
+.topic{display:block;font-size:12.5px;font-weight:600;color:var(--teal);margin-bottom:1px}
+.doc .kc-h{margin:14px 0 4px;font-weight:600}
+.prompt-box{width:100%;height:calc(100vh - 230px);min-height:320px;font-family:var(--mono);font-size:12.5px;line-height:1.5;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);resize:vertical}
 .quick-grid label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-2);margin-bottom:4px}
 .quick-grid .inp{width:100%}
-@media (max-width:980px){.quick-grid{grid-template-columns:1fr 1fr}.quick-grid .wide{grid-column:1/-1}}
+@media (max-width:980px){.quick-grid.r1{grid-template-columns:1fr}.quick-grid.r2{grid-template-columns:1fr 1fr}}
 
 /* Weekly report */
 .report-layout{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;align-items:start}
@@ -244,6 +249,8 @@ tr.row:focus-visible{outline:2px solid var(--teal);outline-offset:-2px}
 .field input[readonly],.field :disabled{background:var(--paper);color:var(--ink-2)}
 .hint{display:block;font-size:12.5px;color:var(--ink-3);margin-top:4px}
 .form-error{color:var(--red);font-size:14px;margin:14px 0 0;min-height:1em}
+.settings-error{margin:0 0 12px;min-height:0}
+.settings-error:not(:empty){background:var(--red-soft);padding:9px 12px;border-radius:6px}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;padding:3px;gap:2px;margin-bottom:16px;flex-wrap:wrap}
 .seg button{appearance:none;border:0;background:none;padding:6px 12px;border-radius:6px;font-size:14px;font-weight:500;color:var(--ink-2);cursor:pointer}
 .seg button.on{background:var(--teal-soft);color:var(--teal);font-weight:600}
@@ -336,8 +343,8 @@ body.gate .shell{grid-template-columns:1fr}
    CLIENT_ID: the OAuth client ID from Google Cloud (ends in .apps.googleusercontent.com).
    SHEET_URL: optional. The tracker sheet link, so nobody has to paste it. */
 const CONFIG = {
-  CLIENT_ID: '673710254879-a8n9gqctgj3ojeuathhh7ok3fj65cepk.apps.googleusercontent.com',
-  SHEET_URL: 'https://docs.google.com/spreadsheets/d/1M66cQlFwvCtYzOQUUbx64VbEEDq48NL6CaYIv_jFS8k/edit?usp=sharing'
+  CLIENT_ID: '',
+  SHEET_URL: ''
 };
 
 (function(){
@@ -424,14 +431,17 @@ const SCHEMA = {
   log:{ tab:'Daily log', one:'log entry', id:'Log ID', intro:'',
     fields:[
       {k:'Log ID',t:'id'},
+      {k:'Topic',t:'topic',full:1,ph:'Becomes a numbered item in the weekly report'},
       {k:'Activity',t:'text',req:1,full:1,title:1},
       {k:'Date',t:'date',def:'day'},
       {k:'Hours',t:'number',step:'0.25'},
       {k:'Module',t:'module'},
       {k:'Category',t:'list',listKey:'Daily log categories'},
-      {k:'Linked Ref',t:'ref',full:1},
-      {k:'Outcome',t:'area',full:1},
-      {k:'Blockers',t:'area',full:1},
+      {k:'Progress',t:'list',listKey:'Progress options'},
+      {k:'Linked Ref',t:'ref'},
+      {k:'Outcome',t:'area',full:1,rows:2},
+      {k:'Next Step',t:'area',full:1,rows:2},
+      {k:'Blockers',t:'area',full:1,rows:2},
       {k:'Logged By',t:'text',ro:1}
     ]}
 };
@@ -479,7 +489,7 @@ const inWeek=(d,w)=>!!parseISO(d) && d.slice(0,10)>=w && d.slice(0,10)<=addISO(w
 function fmtDate(s,opt){ const d=parseISO(s); if(!d) return s||''; const o=opt==='short'?{day:'numeric',month:'short'}:opt==='day'?{weekday:'long',day:'numeric',month:'short'}:opt==='long'?{weekday:'long',day:'numeric',month:'long',year:'numeric'}:{day:'numeric',month:'short',year:'numeric'}; return d.toLocaleDateString('en-GB',o); }
 const num=(v,d)=>{ const n=parseFloat(v); return isNaN(n)?d:n; };
 const fmtH=h=>(Math.round(h*100)/100)+'h';
-const listOf=key=>String(state.settings[key]||'').split(/[;\n]/).map(s=>s.trim()).filter(Boolean);
+const listOf=key=>String(state.settings[key]||'').split(/[;,\n]/).map(s=>s.trim()).filter(Boolean);
 const shortName=e=>String(e||'').split('@')[0];
 const sameUser=(a,b)=>String(a||'').trim().toLowerCase()===String(b||'').trim().toLowerCase();
 const can=()=>state.user.canEdit;
@@ -579,17 +589,28 @@ async function guarded(fn){
 /* ================= Google sign-in ================= */
 const SCOPES='https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.email';
 const auth={token:null,exp:0,email:''};
+const SCOPE_MSG='Google didn\u2019t give the tracker permission to use your Google Sheets. Sign in again, and on Google\u2019s permission screen tick the box for \u201cSee, edit, create and delete all your Google Sheets spreadsheets\u201d.';
+function saveAuth(){ try{ localStorage.setItem('ba_auth',JSON.stringify({token:auth.token,exp:auth.exp,email:auth.email})); }catch(e){} }
+function clearAuth(){ auth.token=null; auth.exp=0; try{ localStorage.removeItem('ba_auth'); }catch(e){} }
+function restoreAuth(){
+  try{ const a=JSON.parse(localStorage.getItem('ba_auth')||'null'); if(a&&a.token&&a.exp>Date.now()+120000){ auth.token=a.token; auth.exp=a.exp; auth.email=a.email||''; return true; } }catch(e){}
+  return false;
+}
+const savedHint=()=>{ try{ return localStorage.getItem('ba_hint')||''; }catch(e){ return ''; } };
 const gisReady=()=>!!(window.google&&google.accounts&&google.accounts.oauth2);
-function signIn(){
+function signIn(chooseAccount){
   return new Promise((res,rej)=>{
     if(!gisReady()){ rej(new Error('Google sign-in has not loaded yet. Check your connection, turn off any blocker for accounts.google.com, and reload the page.')); return; }
-    let hint=''; try{ hint=localStorage.getItem('ba_hint')||''; }catch(e){}
+    const hint=chooseAccount?'':savedHint();
     const client=google.accounts.oauth2.initTokenClient({
-      client_id:CONFIG.CLIENT_ID, scope:SCOPES, login_hint:hint||undefined,
+      client_id:CONFIG.CLIENT_ID, scope:SCOPES, login_hint:hint||undefined, prompt:hint?'':'select_account',
       callback:async r=>{
         if(r.error){ rej(new Error(r.error_description||r.error)); return; }
+        const o=google.accounts.oauth2;
+        if(o.hasGrantedAllScopes&&!o.hasGrantedAllScopes(r,'https://www.googleapis.com/auth/spreadsheets')){ clearAuth(); rej(new Error(SCOPE_MSG)); return; }
         auth.token=r.access_token; auth.exp=Date.now()+(Number(r.expires_in)||3600)*1000;
         try{ const u=await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+auth.token}}).then(x=>x.json()); auth.email=u.email||''; localStorage.setItem('ba_hint',auth.email); }catch(e){}
+        saveAuth(); G.canEdit=null;
         res();
       },
       error_callback:e=>rej(new Error(e&&e.type==='popup_closed'?'The sign-in window was closed before it finished.':e&&e.type==='popup_failed_to_open'?'The browser blocked the Google sign-in window. Allow pop-ups for this page and try again.':'Sign-in did not complete.'))
@@ -599,8 +620,8 @@ function signIn(){
 }
 function signOut(){
   try{ if(auth.token) google.accounts.oauth2.revoke(auth.token,()=>{}); }catch(e){}
-  auth.token=null; auth.email=''; try{ localStorage.removeItem('ba_hint'); }catch(e){}
-  state.loadedOnce=false; gate('signin');
+  clearAuth(); auth.email=''; G.canEdit=null; try{ localStorage.removeItem('ba_hint'); }catch(e){}
+  state.loadedOnce=false; state.person=null; state.chooseAccount=true; gate('signin');
 }
 
 /* ================= Google Sheets API ================= */
@@ -609,7 +630,7 @@ const REG={
   req:{sheet:'Requirements',label:'Requirements',id:'Ref No',prefix:'Requirement prefix',pad:3,fields:{'Ref No':'text','Title':'text','Module':'text','Type':'text','Status':'text','Priority':'text','Owner':'text','Stakeholder':'text','Date Raised':'date','Due Date':'date','Description':'text','Business Rules':'text','Acceptance Criteria':'text','Open Questions':'text','Source Document':'text','Linked CR':'text','Confluence Page':'text','Notes':'text','Record Updated':'stamp','Updated By':'text'}},
   task:{sheet:'Weekly Tasks',label:'Weekly tasks',id:'Task ID',prefix:'Task prefix',pad:3,fields:{'Task ID':'text','Task':'text','Week Commencing':'date','Due Date':'date','Owner':'text','Module':'text','Category':'text','Status':'text','Priority':'text','Linked Ref':'text','Carried From':'text','Notes':'text','Record Updated':'stamp','Updated By':'text'}},
   page:{sheet:'Confluence Pages',label:'Confluence pages',id:'Page Ref',prefix:'Confluence page prefix',pad:3,fields:{'Page Ref':'text','Page Title':'text','URL':'text','Module':'text','Owner':'text','Review Every (days)':'number','Needs Update':'text','Last Checked On':'date','Page Updated On':'date','What Needs Changing':'text','Linked Refs':'text','Notes':'text','Record Updated':'stamp','Updated By':'text'}},
-  log:{sheet:'Daily Log',label:'Daily log',id:'Log ID',prefix:'Daily log prefix',pad:4,fields:{'Log ID':'text','Date':'date','Activity':'text','Module':'text','Category':'text','Linked Ref':'text','Hours':'number','Outcome':'text','Blockers':'text','Logged By':'text','Record Updated':'stamp','Updated By':'text'}}
+  log:{sheet:'Daily Log',label:'Daily log',id:'Log ID',prefix:'Daily log prefix',pad:4,fields:{'Log ID':'text','Date':'date','Topic':'text','Activity':'text','Module':'text','Category':'text','Linked Ref':'text','Hours':'number','Progress':'text','Outcome':'text','Next Step':'text','Blockers':'text','Logged By':'text','Record Updated':'stamp','Updated By':'text'}}
 };
 const REPORT_TAB='Weekly Reports', STATUS_TAB='Statuses', SETTINGS_TAB='Settings';
 const REPORT_FIELDS={'Week Commencing':'date','Person':'text','Summary':'text','Risks and Issues':'text','Plan for Next Week':'text','Record Updated':'stamp','Updated By':'text'};
@@ -620,6 +641,7 @@ const DEFAULT_SETTINGS=[['Project','ET1240 EPass 2.0'],['Change request prefix',
   ['Modules','Passport Services; Origin ID (OID); eGate; PISCES; Watchlist 2.0; Legacy / EPass sync; Payment Gateway; Laissez Passer; Golden ID; General'],
   ['Task categories','Documentation; Requirements; Meeting; Review; Follow-up; Testing support; Admin'],
   ['Daily log categories','Requirements analysis; Documentation; Meeting; Stakeholder follow-up; Review; Testing support; Admin'],
+  ['Progress options','In progress; Completed; Submitted and under review; On hold; Pending confirmation'],
   ['Due soon window (days)','2'],['Daily target hours','8']];
 const DEFAULT_STATUSES=[['Change requests','On hold','Amber','Open'],['Change requests','Awaiting feasibility','Amber','Open'],['Change requests','Awaiting ICS decision','Amber','Open'],['Change requests','Approved, not scheduled','Teal','Open'],['Change requests','Scheduled','Teal','Open'],['Change requests','Implemented','Green','Done'],['Change requests','Rejected','Grey','Closed'],
   ['Requirements','Open','Teal','Open'],['Requirements','In analysis','Teal','Open'],['Requirements','Awaiting ICS confirmation','Amber','Open'],['Requirements','Deferred','Amber','Open'],['Requirements','Confirmed','Green','Done'],['Requirements','Closed','Grey','Closed'],
@@ -633,11 +655,11 @@ const trimAll=row=>(row||[]).map(x=>String(x??'').trim());
 function sheetIdFrom(s){ const m=/\/spreadsheets\/d\/([a-zA-Z0-9_-]{20,})/.exec(s||''); if(m) return m[1]; return /^[a-zA-Z0-9_-]{30,}$/.test(String(s||'').trim())?String(s).trim():''; }
 async function sfetch(path,opt){
   opt=opt||{};
-  if(!auth.token||Date.now()>auth.exp-30000) throw Object.assign(new Error('SIGNIN'),{code:'SIGNIN'});
+  if(!auth.token||Date.now()>auth.exp-30000){ clearAuth(); } if(!auth.token) throw Object.assign(new Error('SIGNIN'),{code:'SIGNIN'});
   let res;
   try{ res=await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+G.id+path,{method:opt.method||'GET',headers:{Authorization:'Bearer '+auth.token,'Content-Type':'application/json'},body:opt.body?JSON.stringify(opt.body):undefined}); }
   catch(e){ throw Object.assign(new Error('Could not reach Google. Check your internet connection.'),{status:0}); }
-  if(res.status===401){ auth.token=null; throw Object.assign(new Error('SIGNIN'),{code:'SIGNIN'}); }
+  if(res.status===401){ clearAuth(); throw Object.assign(new Error('SIGNIN'),{code:'SIGNIN'}); }
   const j=await res.json().catch(()=>({}));
   if(!res.ok) throw Object.assign(new Error((j.error&&j.error.message)||res.statusText||'Request failed'),{status:res.status});
   return j;
@@ -647,6 +669,8 @@ function friendly(e,write){
   let t=m;
   if(/has not been used|is disabled|SERVICE_DISABLED/i.test(m)) t='The Google Sheets API is not switched on for your Google Cloud project. Enable it under APIs & Services > Library > Google Sheets API, wait a minute, then reload';
   else if(e.status===404) t='That Google Sheet could not be found. Check the link';
+  else if(e.status===403&&/scope|insufficientPermissions/i.test(m)){ clearAuth(); t=SCOPE_MSG.replace(/\.$/,''); }
+  else if(e.status===403&&!write) t=`Google refused access for ${auth.email||'this account'}. If the sheet is shared with this account (or with anyone who has the link), sign out, sign in again and make sure you tick the Google Sheets permission. Google said: ${m}`;
   else if(e.status===403) t=write?'You have view access to this sheet, so changes can\u2019t be saved. Ask the owner for edit access':`This sheet isn\u2019t shared with ${auth.email||'your Google account'}. Ask the owner to share it with you, or sign in with a different account`;
   else if(e.status===429) t='Google is limiting requests for a moment. Wait a few seconds and try again';
   return Object.assign(new Error(t),{status:e.status});
@@ -876,9 +900,9 @@ function gate(phase,error){
     <p>This page needs your Google OAuth client ID before anyone can sign in. Open <b>index.html</b>, find <code>CLIENT_ID</code> near the top of the script, paste your client ID between the quotes, and upload the file again.</p>
     <p>Until then you can look around with sample data.</p>
     <div class="row"><button class="btn primary" data-act="preview">Open preview with sample data</button></div>`;
-  else if(phase==='signin') body=`<h2>Sign in to open the tracker</h2>
+  else if(phase==='signin'){ const h=state.chooseAccount?'':savedHint(); body=`<h2>${h?'Welcome back':'Sign in to open the tracker'}</h2>
     <p>Use the Google account that the tracker sheet is shared with. You\u2019ll only see and edit what the sheet allows.</p>
-    <div class="row"><button class="btn primary" data-act="signin">Sign in with Google</button></div>${err}`;
+    <div class="row"><button class="btn primary" data-act="signin">${h?'Continue as '+esc(h):'Sign in with Google'}</button>${h?'<button class="btn" data-act="signin-other">Use a different account</button>':''}</div>${err}`; }
   else body=`<h2>Connect your Google Sheet</h2>
     <p>Paste the link to the tracker sheet. A blank sheet works too: the tracker adds its tabs the first time it opens.</p>
     <label class="lbl" for="sheetLink">Google Sheet link</label>
@@ -892,9 +916,9 @@ function enterApp(mode){
   document.body.classList.remove('gate');
   load(false);
 }
-async function doSignIn(){
+async function doSignIn(other){
   const b=$('[data-act="signin"]'); if(b){ b.disabled=true; b.textContent='Waiting for Google\u2026'; }
-  try{ await signIn(); G.canEdit=null; if(G.id) enterApp('sheets'); else gate('pick'); }
+  try{ await signIn(other||state.chooseAccount); state.chooseAccount=false; if(G.id) enterApp('sheets'); else gate('pick'); }
   catch(e){ gate('signin',errMsg(e)); }
 }
 function doConnect(){
@@ -1186,12 +1210,18 @@ function refOptions(){
   for(const k of ['task','req','cr']) state.data[k].forEach(r=>{ if(!isClosed(k,r)) out.push(`<option value="${esc(r[SCHEMA[k].id])}">${esc(titleOf(k,r))}</option>`); });
   return out.join('');
 }
+function topicOptions(){
+  const s=new Set(), since=addISO(today(),-28);
+  state.data.log.filter(r=>r.Topic&&r.Date>=since).forEach(r=>s.add(r.Topic));
+  state.data.task.filter(r=>!isClosed('task',r)).forEach(r=>s.add(r.Task));
+  return [...s].map(t=>`<option value="${esc(t)}">`).join('');
+}
 function renderLog(){
   const day=state.day, week=weekOf(day);
   const days=[...Array(7)].map((_,i)=>addISO(week,i));
   const entries=logsFor(r=>r.Date===day).sort((a,b)=>String(a['Log ID']).localeCompare(String(b['Log ID']),undefined,{numeric:true}));
   const showWho=state.person==='all';
-  const cats=listOf('Daily log categories');
+  const cats=listOf('Daily log categories'), progs=listOf('Progress options');
   $('#content').innerHTML=`
     <div class="strip">
       <div class="nav3" style="flex:1">
@@ -1204,40 +1234,49 @@ function renderLog(){
     </div>
     ${can()?`<div class="quick">
       <h3>Add to ${fmtDate(day,'day')}</h3>
-      <div class="quick-grid">
-        <div class="wide"><label for="qa_act">What did you work on?</label><input class="inp" id="qa_act" placeholder="e.g. Reviewed OID reissuance rules with ICS" autocomplete="off"></div>
+      <div class="quick-grid r1">
+        <div><label for="qa_topic">Topic</label><input class="inp" id="qa_topic" list="dl_topic" placeholder="e.g. Hajj Service Inclusion as an Urgent Service" autocomplete="off"></div>
+        <div><label for="qa_act">What did you do?</label><input class="inp" id="qa_act" placeholder="e.g. Defined eligible applicant categories and processing timeline with ICS" autocomplete="off"></div>
+      </div>
+      <div class="quick-grid r2">
         <div><label for="qa_mod">Module</label><input class="inp" id="qa_mod" list="dl_mod" value="${esc(state.qaMod||'')}" autocomplete="off"></div>
         <div><label for="qa_cat">Category</label><select class="inp" id="qa_cat">${cats.map(c=>`<option${c===state.qaCat?' selected':''}>${esc(c)}</option>`).join('')}</select></div>
         <div><label for="qa_ref">Linked ref</label><input class="inp" id="qa_ref" list="dl_ref" autocomplete="off"></div>
+        <div><label for="qa_prog">Progress</label><select class="inp" id="qa_prog">${progs.map(c=>`<option>${esc(c)}</option>`).join('')}</select></div>
         <div><label for="qa_hrs">Hours</label><input class="inp" id="qa_hrs" type="number" min="0" step="0.25"></div>
         <div><button class="btn primary" data-act="log-add">Add entry</button></div>
       </div>
+      <p class="hint" style="margin:8px 0 0">Entries with the same topic are combined into one item in the weekly report. Open an entry to add the outcome, next step or a blocker.</p>
       <datalist id="dl_mod">${moduleOptions().map(m=>`<option value="${esc(m)}">`).join('')}</datalist>
       <datalist id="dl_ref">${refOptions()}</datalist>
+      <datalist id="dl_topic">${topicOptions()}</datalist>
     </div>`:''}
     ${entries.length?`<div class="table-wrap"><table>
-      <thead><tr><th class="static">Log ID</th><th class="static">Activity</th><th class="static">Module</th><th class="static">Category</th><th class="static">Linked ref</th>${showWho?'<th class="static">Logged by</th>':''}<th class="static num">Hours</th></tr></thead>
-      <tbody>${entries.map(r=>`<tr class="row" tabindex="0" data-open="log:${r._uid}"><td class="ref">${esc(r['Log ID'])}</td><td class="title"><span class="clamp">${esc(r.Activity)}</span>${r.Outcome?`<span class="sub clamp">${esc(r.Outcome)}</span>`:''}${r.Blockers?`<span class="pill tone-bad" style="margin-top:4px">Blocker</span>`:''}</td><td>${esc(r.Module)}</td><td>${esc(r.Category)}</td><td class="nowrap">${esc(r['Linked Ref'])}</td>${showWho?`<td class="nowrap">${esc(shortName(r['Logged By']))}</td>`:''}<td class="num">${r.Hours?fmtH(num(r.Hours,0)):''}</td></tr>`).join('')}</tbody>
+      <thead><tr><th class="static">Log ID</th><th class="static">Topic and activity</th><th class="static">Module</th><th class="static">Progress</th><th class="static">Linked ref</th>${showWho?'<th class="static">Logged by</th>':''}<th class="static num">Hours</th></tr></thead>
+      <tbody>${entries.map(r=>`<tr class="row" tabindex="0" data-open="log:${r._uid}"><td class="ref">${esc(r['Log ID'])}</td><td class="title">${r.Topic?`<span class="topic">${esc(r.Topic)}</span>`:''}<span class="clamp">${esc(r.Activity)}</span>${r.Outcome?`<span class="sub clamp">Outcome: ${esc(r.Outcome)}</span>`:''}${r['Next Step']?`<span class="sub clamp">Next: ${esc(r['Next Step'])}</span>`:''}${r.Blockers?`<span class="pill tone-bad" style="margin-top:4px">Blocker</span>`:''}</td><td>${esc(r.Module)}</td><td>${r.Progress?`<span class="pill tone-${progressTone(r.Progress)}">${esc(r.Progress)}</span>`:''}</td><td class="nowrap">${esc(r['Linked Ref'])}</td>${showWho?`<td class="nowrap">${esc(shortName(r['Logged By']))}</td>`:''}<td class="num">${r.Hours?fmtH(num(r.Hours,0)):''}</td></tr>`).join('')}</tbody>
       <tfoot><tr><td colspan="${showWho?6:5}">Total for ${fmtDate(day,'day')}</td><td class="num">${fmtH(sumH(entries))}</td></tr></tfoot>
     </table></div>`:`<div class="empty"><h3>Nothing logged for ${fmtDate(day,'day')}</h3><p>${can()?'Add what you worked on above. Each entry feeds the weekly report.':'No entries for this day yet.'}</p></div>`}`;
 }
 async function addLog(){
   const act=$('#qa_act').value.trim();
-  if(!act){ $('#qa_act').focus(); toast('Describe what you worked on first.'); return; }
-  const rec={'Log ID':'','Date':state.day,'Activity':act,'Module':$('#qa_mod').value.trim(),'Category':$('#qa_cat').value,'Linked Ref':$('#qa_ref').value.trim(),'Hours':$('#qa_hrs').value,'Outcome':'','Blockers':'','Logged By':state.user.email||''};
+  if(!act){ $('#qa_act').focus(); toast('Describe what you did first.'); return; }
+  const rec={'Log ID':'','Date':state.day,'Topic':$('#qa_topic').value.trim(),'Activity':act,'Module':$('#qa_mod').value.trim(),'Category':$('#qa_cat').value,'Linked Ref':$('#qa_ref').value.trim(),'Hours':$('#qa_hrs').value,'Progress':$('#qa_prog').value,'Outcome':'','Next Step':'','Blockers':'','Logged By':state.user.email||''};
   state.qaMod=rec.Module; state.qaCat=rec.Category;
   const btn=$('[data-act="log-add"]'); btn.disabled=true; btn.textContent='Adding\u2026';
-  try{ const out=await persist('log',rec,{isNew:true,autoId:true}); renderSide(); renderLog(); $('#qa_act')?.focus(); toast(`Added ${out['Log ID']}`); }
+  try{ const out=await persist('log',rec,{isNew:true,autoId:true}); renderSide(); renderLog(); $('#qa_topic')?.focus(); toast(`Added ${out['Log ID']}`); }
   catch(e){ btn.disabled=false; btn.textContent='Add entry'; toast(errMsg(e)); }
 }
 function fillModuleFromRef(ref){
   for(const k of ['task','req','cr']){ const r=state.data[k].find(x=>sameUser(x[SCHEMA[k].id],ref)); if(r && r.Module) return r.Module; }
   return '';
 }
+function refRecord(ref){ for(const k of ['task','req','cr']){ const r=state.data[k].find(x=>sameUser(x[SCHEMA[k].id],ref)); if(r) return {k,r}; } return null; }
+function lastForTopic(topic){ const t=String(topic||'').toLowerCase(); return state.data.log.filter(r=>String(r.Topic||'').toLowerCase()===t).sort((a,b)=>String(b.Date).localeCompare(String(a.Date)))[0]; }
 
 /* ================= Weekly report ================= */
 function reportPerson(){ return state.person==='all'?'Everyone':(state.person||''); }
 function currentReport(){ return state.reports.find(r=>r['Week Commencing']===state.reportWeek && sameUser(r.Person,reportPerson())); }
+function reportAuthor(){ let a=''; try{ a=localStorage.getItem('ba_author')||''; }catch(e){} return a||(state.person==='all'?'':shortName(state.person||state.user.email)); }
 function ensureDraft(){
   const key=state.reportWeek+'|'+reportPerson();
   if(!state.reportDraft || state.reportDraft.key!==key){
@@ -1246,17 +1285,32 @@ function ensureDraft(){
   }
   return state.reportDraft;
 }
+const sentence=s=>{ s=String(s||'').trim().replace(/\s+/g,' '); if(!s) return ''; s=s[0].toUpperCase()+s.slice(1); return /[.!?]$/.test(s)?s:s+'.'; };
+const isComplete=p=>/complet|done|deliver|submitt|finali/i.test(p||'');
+const noteLines=t=>String(t||'').split(/\n+/).map(l=>l.replace(/^\s*[-*\u2022]\s*/,'').trim()).filter(Boolean);
+function progressTone(p){ p=String(p||''); if(isComplete(p)&&!/review/i.test(p)) return 'ok'; if(/hold|pending|await|block/i.test(p)) return 'warn'; return p?'info':'muted'; }
+function reportTopics(logs){
+  const m=new Map();
+  logs.slice().sort((a,b)=>(a.Date+' '+a['Log ID']).localeCompare(b.Date+' '+b['Log ID'],undefined,{numeric:true})).forEach(r=>{
+    const title=String(r.Topic||r.Activity||'').trim(); if(!title) return;
+    const key=title.toLowerCase();
+    if(!m.has(key)) m.set(key,{title,rows:[],mods:new Set(),refs:new Set(),progress:'',next:'',outcome:''});
+    const t=m.get(key); t.rows.push(r);
+    if(r.Module) t.mods.add(r.Module); if(r['Linked Ref']) t.refs.add(r['Linked Ref']);
+    if(r.Progress) t.progress=r.Progress; if(r['Next Step']) t.next=r['Next Step']; if(r.Outcome) t.outcome=r.Outcome;
+  });
+  return [...m.values()];
+}
 function reportData(){
   const w=state.reportWeek, end=addISO(w,6), p=state.person;
   const mine=r=>p==='all'||!p||sameUser(r['Updated By'],p);
   const logs=logsFor(r=>inWeek(r.Date,w));
   const byDay=[...Array(7)].map((_,i)=>{ const d=addISO(w,i); return {d,rows:logs.filter(r=>r.Date===d)}; });
-  const mods={}; logs.forEach(r=>{ const m=r.Module||'Unassigned'; mods[m]=(mods[m]||0)+num(r.Hours,0); });
   const ownerOk=r=>p==='all'||!p||!r.Owner||sameUser(r.Owner,p)||sameUser(r.Owner,shortName(p));
   const tasks=state.data.task.filter(r=>r['Week Commencing']===w && ownerOk(r));
   const upd=k=>state.data[k].filter(r=>inWeek(String(r['Record Updated']||''),w) && mine(r));
   return {
-    w,end,logs,byDay,mods,
+    w,end,logs,byDay,topics:reportTopics(logs),
     hours:sumH(logs), days:byDay.filter(d=>d.rows.length).length,
     done:tasks.filter(r=>isDone('task',r)),
     open:tasks.filter(r=>!isClosed('task',r) || /carr/i.test(r.Status||'')),
@@ -1265,28 +1319,112 @@ function reportData(){
     blockers:logs.filter(r=>r.Blockers)
   };
 }
-function paraOrPlaceholder(text,ph){ return text?text.split(/\n+/).map(l=>/^\s*[-*\u2022]\s+/.test(l)?`<li>${esc(l.replace(/^\s*[-*\u2022]\s+/,''))}</li>`:`<p>${esc(l)}</p>`).join('').replace(/(<li>.*?<\/li>)+/g,m=>`<ul>${m}</ul>`):`<p class="placeholder">${ph}</p>`; }
+function reportParts(D,draft){
+  const acc=[];
+  D.topics.filter(t=>isComplete(t.progress)).forEach(t=>acc.push(sentence(t.rows[t.rows.length-1].Activity)));
+  D.done.forEach(r=>{ if(!D.topics.some(t=>t.title.toLowerCase()===String(r.Task).toLowerCase()&&isComplete(t.progress))) acc.push(sentence(r.Task)); });
+  const challenges=[];
+  noteLines(draft['Risks and Issues']).forEach(l=>{
+    const [issuePart,impact]=l.split(/\s*Impact:\s*/i);
+    const m=/^([^:]{3,70}):\s*(.+)$/.exec(issuePart);
+    challenges.push({title:m?m[1].trim():'',issue:sentence(m?m[2]:issuePart),impact:sentence(impact||'')});
+  });
+  D.blockers.forEach(r=>challenges.push({title:String(r.Topic||r.Activity||'').trim(),issue:sentence(r.Blockers),impact:''}));
+  const next=[], seen=new Set();
+  [...noteLines(draft['Plan for Next Week']),...D.topics.map(t=>t.next).filter(Boolean)].forEach(l=>{ const k=l.toLowerCase(); if(!seen.has(k)){ seen.add(k); next.push(sentence(l)); } });
+  return {acc,challenges,next};
+}
 function reportDocHTML(D,draft){
-  const list=(rows,fn)=>rows.length?`<ul>${rows.map(fn).join('')}</ul>`:'<p>None this week.</p>';
-  const who=state.person==='all'?'Team':shortName(state.person);
-  const modRows=Object.entries(D.mods).sort((a,b)=>b[1]-a[1]);
+  const P=reportParts(D,draft), author=reportAuthor();
+  const ul=(items,empty)=>items.length?`<ul>${items.map(i=>`<li>${esc(i)}</li>`).join('')}</ul>`:`<p class="placeholder">${empty}</p>`;
   return `
-    <h2>Weekly report</h2>
-    <p class="doc-meta">${esc(state.settings['Project']||'')}, ${fmtDate(D.w)} to ${fmtDate(D.end)}${who?', '+esc(who):''}</p>
-    <h4>Summary</h4>${paraOrPlaceholder(draft['Summary'],'Add a summary in the notes panel.')}
-    <h4>Work by day</h4>
-    ${D.logs.length?D.byDay.filter(d=>d.rows.length).map(d=>`<p class="day-h">${fmtDate(d.d,'day')} (${fmtH(sumH(d.rows))})</p><ul>${d.rows.map(r=>`<li>${esc(r.Activity)}${r.Module||r['Linked Ref']?` <span class="muted">[${esc([r.Module,r['Linked Ref']].filter(Boolean).join(', '))}]</span>`:''}${r.Outcome?`: ${esc(r.Outcome)}`:''}</li>`).join('')}</ul>`).join(''):'<p>No daily log entries this week.</p>'}
-    <h4>Time by module</h4>
-    ${modRows.length?`<table><thead><tr><th>Module</th><th class="num">Hours</th><th class="num">Share</th></tr></thead><tbody>${modRows.map(([m,h])=>`<tr><td>${esc(m)}</td><td class="num">${fmtH(h)}</td><td class="num">${D.hours?Math.round(h/D.hours*100):0}%</td></tr>`).join('')}<tr><td><strong>Total</strong></td><td class="num"><strong>${fmtH(D.hours)}</strong></td><td></td></tr></tbody></table>`:'<p>No hours logged.</p>'}
-    <h4>Tasks completed</h4>${list(D.done,r=>`<li>${esc(r['Task ID'])} ${esc(r.Task)}</li>`)}
-    <h4>Tasks still open</h4>${list(D.open,r=>`<li>${esc(r['Task ID'])} ${esc(r.Task)} <span class="muted">(${esc(r.Status)})</span></li>`)}
-    <h4>Change requests updated</h4>${list(D.cr,r=>`<li>${esc(r['CR Ref'])} ${esc(r.Title)}: ${esc(r.Status)}</li>`)}
-    <h4>Requirements updated</h4>${list(D.req,r=>`<li>${esc(r['Ref No'])} ${esc(r.Title)}: ${esc(r.Status)}</li>`)}
-    <h4>Confluence pages updated</h4>${list(D.pages,r=>`<li>${esc(r['Page Ref'])} ${esc(r['Page Title'])}</li>`)}
-    <h4>Blockers, risks and issues</h4>
-    ${draft['Risks and Issues']?paraOrPlaceholder(draft['Risks and Issues'],''):''}
-    ${D.blockers.length?`<ul>${D.blockers.map(r=>`<li>${esc(r.Blockers)} <span class="muted">(${fmtDate(r.Date,'short')}${r['Linked Ref']?', '+esc(r['Linked Ref']):''})</span></li>`).join('')}</ul>`:(draft['Risks and Issues']?'':'<p>None raised this week.</p>')}
-    <h4>Plan for next week</h4>${paraOrPlaceholder(draft['Plan for Next Week'],'Add next week\u2019s plan in the notes panel.')}`;
+    <h2>Weekly Progress Report</h2>
+    <p class="doc-meta">${esc(state.settings['Project']||'')}<br>Reporting period: ${fmtDate(D.w)} to ${fmtDate(D.end)}${author?`<br>Prepared by: ${esc(author)}`:''}</p>
+    <h4>1. Core Activities</h4>
+    ${draft['Summary']?noteLines(draft['Summary']).map(l=>`<p>${esc(l)}</p>`).join(''):'<p class="placeholder">Add a summary in the notes panel, or use the AI prompt to have it written for you.</p>'}
+    <p class="kc-h">Key Accomplishments</p>
+    ${ul(P.acc,'Nothing is marked complete this week. Set Progress to Completed on a daily log entry to list it here.')}
+    <h4>2. Focus Areas</h4>
+    <p>Work during the reporting period was concentrated in the following areas:</p>
+    ${ul(D.topics.map(t=>sentence(t.title)),'No daily log entries this week.')}
+    <h4>3. Key Contents</h4>
+    ${D.topics.length?D.topics.map((t,i)=>{
+      const act=[...new Set(t.rows.map(r=>(sentence(r.Activity)+(r.Outcome?' '+sentence(r.Outcome):'')).trim()))].join(' ');
+      return `<p class="kc-h">3.${i+1}\u2003${esc(t.title)}</p><p><b>Activity:</b>\u2003${esc(act)}</p><p><b>Status:</b>\u2003${esc(sentence(t.progress||'In progress'))}${t.next?' Next step: '+esc(sentence(t.next)):''}</p>`;
+    }).join(''):'<p class="placeholder">Each topic in the daily log becomes a numbered item here.</p>'}
+    <h4>4. Challenges</h4>
+    ${P.challenges.length?P.challenges.map((c,i)=>`<p class="kc-h">4.${i+1}\u2003${esc(c.title||'Issue '+(i+1))}</p><p><b>Issue:</b>\u2003${esc(c.issue)}</p>${c.impact?`<p><b>Impact:</b>\u2003${esc(c.impact)}</p>`:''}`).join(''):'<p>No significant challenges were raised during the reporting period.</p>'}
+    <h4>5. Next Steps</h4>
+    ${ul(P.next,'Add next week\u2019s plan in the notes panel, or set a Next Step on daily log entries.')}`;
+}
+function buildPrompt(D,draft){
+  const project=state.settings['Project']||'the project', author=reportAuthor();
+  const L=[];
+  L.push(`You are helping me write my weekly progress report for the ${project} project with Ethiopia's Immigration and Citizenship Service (ICS). Using only the information under "THIS WEEK'S NOTES", write the complete report in the exact format, numbering and writing style described below. Do not invent activities, people, dates, decisions or outcomes that are not in the notes. If a status is unclear, write "In progress".`);
+  L.push('',`REPORT DETAILS`,`Project: ${project}`,`Reporting period: ${fmtDate(D.w,'long').replace(/^\w+ /,'')} to ${fmtDate(D.end,'long').replace(/^\w+ /,'')}`,author?`Prepared by: ${author}`:'');
+  L.push('','FORMAT AND LAYOUT (follow exactly, keep the numbering)',
+'1. Core Activities',
+'- Open with one or two paragraphs summarising the week. Begin with "Activities were directed at..." and name the main areas of work, then describe what was completed in one flowing paragraph. A second paragraph can cover the work that was taken up or progressed.',
+'- Then the sub-heading "Key Accomplishments" followed by bullets. One bullet per accomplishment, each a full past-tense sentence starting with a verb such as Delivered, Completed, Finalized, Submitted, Held, Took up, Added or Addressed.',
+'2. Focus Areas',
+'- The line "Work during the reporting period was concentrated in the following areas:" followed by one bullet per topic, written as a short title in title case ending with a full stop, for example "Hajj Service Inclusion in EPass 2.0 as an Urgent Service."',
+'3. Key Contents',
+'- One numbered sub-section per topic (3.1, 3.2 ...) in the same order as the Focus Areas, each with a short title.',
+'- Under each: "Activity:" then one paragraph of three to five sentences on what was done, who was involved and what it covered. Then "Status:" beginning with one of Completed, In progress, Submitted and under review, On hold or Pending confirmation, followed by a full stop and one or two sentences on where the item stands and what remains.',
+'- Combine all daily entries for a topic into one item that describes the week as a whole, not day by day.',
+'4. Challenges',
+'- Numbered sub-sections (4.1, 4.2 ...) each with a short title, then "Issue:" (one or two sentences) and "Impact:" (one or two sentences on the effect on delivery, scope, quality or timeline).',
+'- Build these from the blockers, risks and items waiting on others in the notes. If there are none, write "No significant challenges were raised during the reporting period."',
+'5. Next Steps',
+'- Bullets. Each starts with a short action phrase, then an em dash, then the detail, for example "Confirm the reissue fee configuration \u2014 obtain client confirmation of the fees for the remaining reissue reasons and apply the configuration on the portal."');
+  L.push('','WRITING STYLE',
+'- Formal and impersonal: no "I" or "we". Mostly past tense and passive voice ("was delivered", "were reviewed", "was taken up").',
+'- Spell out abbreviations the first time they appear, then use the short form, for example Immigration and Citizenship Service (ICS), Origin ID (OID), User Acceptance Testing (UAT).',
+'- Refer to ICS as "the client" where that reads naturally. Keep system and module names exactly as written in the notes, such as EPass 2.0, eGate, PISCES and Golden ID.',
+'- Plain text only: no markdown, no asterisks, no # symbols. Use "\u2022" for bullets so it pastes cleanly into Word.');
+  L.push('','STYLE EXAMPLE (from a previous report; match the tone and structure, not the content)',
+'3.6 Hajj Service Inclusion as an Urgent Service',
+'Activity: A requirement was taken up for the inclusion of the Hajj service in EPass 2.0 as an urgent service. The work covered the applicant categories eligible to apply under the service, the processing timeline that distinguishes it from the standard service, and the effect on the application workflow and the processing queue.',
+'Status: In progress. The requirement has been taken up and is being defined.',
+'4.2 Requirement and Change Management Process',
+'Issue: Requirements, configuration changes and change requests continue to be raised and agreed through informal discussions without prior involvement of the Business Analysis team.',
+'Impact: Business requirements may not be fully analysed before implementation, and there is an increased risk of configuration inconsistency and rework.');
+  L.push('',"THIS WEEK'S NOTES");
+  if(draft['Summary']) L.push('My summary notes:',...noteLines(draft['Summary']).map(l=>'- '+l),'');
+  L.push('Work by topic (from my daily log):');
+  if(!D.topics.length) L.push('- No daily log entries this week.');
+  D.topics.forEach((t,i)=>{
+    const meta=[[...t.mods].join(', '),[...t.refs].join(', ')].filter(Boolean).join('; ');
+    L.push(`${i+1}. ${t.title}${meta?' ('+meta+')':''}. Latest progress: ${t.progress||'not stated'}.`);
+    t.rows.forEach(r=>L.push(`   - ${fmtDate(r.Date,'day')}: ${sentence(r.Activity)}${r.Outcome?' Outcome: '+sentence(r.Outcome):''}${r['Next Step']?' Next step: '+sentence(r['Next Step']):''}${r.Blockers?' Blocker: '+sentence(r.Blockers):''}`));
+  });
+  const sec=(title,rows,fn)=>{ if(rows.length) L.push('',title,...rows.map(r=>'- '+fn(r))); };
+  sec('Tasks completed this week:',D.done,r=>`${r['Task ID']} ${r.Task}`);
+  sec('Tasks still open or carried over:',D.open,r=>`${r['Task ID']} ${r.Task} (${r.Status})`);
+  sec('Change requests updated this week:',D.cr,r=>`${r['CR Ref']} ${r.Title}: ${r.Status}${r['Reason on Hold']?' ('+r['Reason on Hold']+')':''}`);
+  sec('Requirements updated this week:',D.req,r=>`${r['Ref No']} ${r.Title}: ${r.Status}`);
+  sec('Confluence pages updated this week:',D.pages,r=>`${r['Page Ref']} ${r['Page Title']}`);
+  sec('Risks and issues (my notes):',noteLines(draft['Risks and Issues']),l=>l);
+  sec('Plan for next week (my notes):',noteLines(draft['Plan for Next Week']),l=>l);
+  L.push('','Write the complete report now, starting with "1. Core Activities".');
+  return L.filter((l,i,a)=>!(l===''&&a[i-1]==='')).join('\n');
+}
+function openPrompt(){
+  const text=buildPrompt(reportData(),ensureDraft());
+  state.editing={prompt:true};
+  $('#drawer').innerHTML=`
+    <header><div><h3>AI prompt for this week</h3><p class="meta">Paste into Claude or ChatGPT to get the full report in your usual format.</p></div><button class="icon-btn" data-act="close" aria-label="Close">\u00D7</button></header>
+    <div class="body"><textarea id="promptText" class="prompt-box" spellcheck="false" aria-label="Prompt">${esc(text)}</textarea>
+      <p class="hint">You can edit the text before copying. The more detail your daily log entries have (topic, what you did, outcome, progress), the better the report.</p></div>
+    <footer><button class="btn primary" data-act="copy-prompt">Copy prompt</button><button class="btn" data-act="close">Close</button></footer>`;
+  $('#drawer').setAttribute('aria-label','AI prompt');
+  openDrawer('#promptText');
+  $('#promptText').setSelectionRange(0,0); $('#promptText').scrollTop=0;
+}
+async function copyPrompt(){
+  const ta=$('#promptText'); let ok=false;
+  try{ await navigator.clipboard.writeText(ta.value); ok=true; }catch(e){ ta.select(); try{ ok=document.execCommand('copy'); }catch(e2){} }
+  toast(ok?'Prompt copied. Paste it into Claude or ChatGPT.':'Copying was blocked. Select all the text in the box and copy it yourself.');
 }
 function renderReport(){
   const D=reportData(), draft=ensureDraft(), rep=currentReport();
@@ -1301,14 +1439,15 @@ function renderReport(){
       </div>
       ${personSelect()}
       <span style="flex:1"></span>
+      <button class="btn primary" data-act="ai-prompt">AI prompt</button>
       <button class="btn" data-act="copy-report">Copy report</button>
       <button class="btn" data-act="print">Print</button>
     </div>
     <div class="kpis">
       ${stat('Hours logged',fmtH(D.hours).replace('h','<small>h</small>'))}
       ${stat('Days logged',`${D.days}<small> / 5</small>`)}
-      ${stat('Tasks completed',D.done.length)}
-      ${stat('Records updated',D.cr.length+D.req.length+D.pages.length)}
+      ${stat('Topics',D.topics.length)}
+      ${stat('Completed',D.topics.filter(t=>isComplete(t.progress)).length+D.done.length)}
       ${stat('Blockers raised',D.blockers.length)}
     </div>
     <div class="report-layout">
@@ -1316,9 +1455,10 @@ function renderReport(){
       <section class="panel notes">
         <header><h3>Report notes</h3>${rep&&rep['Updated By']?`<span class="sub">Saved by ${esc(shortName(rep['Updated By']))}</span>`:''}</header>
         <div class="panel-body">
-          <div><label for="rn_sum">Summary</label><textarea id="rn_sum" data-rn="Summary" rows="5"${can()?'':' disabled'} placeholder="Headline progress for the week">${esc(draft['Summary'])}</textarea></div>
-          <div><label for="rn_risk">Risks and issues</label><textarea id="rn_risk" data-rn="Risks and Issues" rows="4"${can()?'':' disabled'} placeholder="Blockers from the daily log are added automatically">${esc(draft['Risks and Issues'])}</textarea></div>
-          <div><label for="rn_plan">Plan for next week</label><textarea id="rn_plan" data-rn="Plan for Next Week" rows="5"${can()?'':' disabled'} placeholder="Start lines with - to make a list">${esc(draft['Plan for Next Week'])}</textarea>
+          <div><label for="rn_author">Prepared by</label><input class="inp" style="width:100%" id="rn_author" data-author value="${esc(reportAuthor())}" placeholder="e.g. Tedros Fiseha, Business Analyst"></div>
+          <div><label for="rn_sum">Summary</label><textarea id="rn_sum" data-rn="Summary" rows="5"${can()?'':' disabled'} placeholder="Headline progress for the week. Leave blank to let the AI write it.">${esc(draft['Summary'])}</textarea></div>
+          <div><label for="rn_risk">Challenges</label><textarea id="rn_risk" data-rn="Risks and Issues" rows="4"${can()?'':' disabled'} placeholder="One per line. Title: issue. Impact: effect on delivery">${esc(draft['Risks and Issues'])}</textarea><span class="hint">Blockers from the daily log are added automatically.</span></div>
+          <div><label for="rn_plan">Next steps</label><textarea id="rn_plan" data-rn="Plan for Next Week" rows="5"${can()?'':' disabled'} placeholder="One per line">${esc(draft['Plan for Next Week'])}</textarea>
             ${can()?'<button class="link" data-act="plan-fill" style="margin-top:4px">Add open and next week\u2019s tasks</button>':''}</div>
           ${can()?`<div class="actions"><button class="btn primary" data-act="save-report">Save notes</button><span class="unsaved" id="rnState">${draft.dirty?'Unsaved changes':''}</span></div>`:''}
           <p class="hint">Notes are kept on the Weekly Reports sheet, one row per week and person.</p>
@@ -1348,7 +1488,7 @@ function copyReport(){
 function fillPlan(){
   const d=ensureDraft(), next=addISO(state.reportWeek,7);
   const p=state.person, ownerOk=r=>p==='all'||!p||!r.Owner||sameUser(r.Owner,p)||sameUser(r.Owner,shortName(p));
-  const lines=state.data.task.filter(r=>!isClosed('task',r) && ownerOk(r) && (r['Week Commencing']===next || r['Week Commencing']===state.reportWeek)).map(r=>`- ${r['Task ID']} ${r.Task}`);
+  const lines=state.data.task.filter(r=>!isClosed('task',r) && ownerOk(r) && (r['Week Commencing']===next || r['Week Commencing']===state.reportWeek)).map(r=>r.Task);
   const fresh=lines.filter(l=>!d['Plan for Next Week'].includes(l));
   if(!fresh.length){ toast('No open tasks to add.'); return; }
   d['Plan for Next Week']=(d['Plan for Next Week']?d['Plan for Next Week'].replace(/\s+$/,'')+'\n':'')+fresh.join('\n');
@@ -1381,6 +1521,7 @@ function fieldHTML(k,f,val,ro){
     case 'status': input=sel(state.statuses[k].map(s=>s.status)); break;
     case 'list': input=sel(listOf(f.listKey)); break;
     case 'module': input=`<input${nm} list="dr_mod" value="${esc(v)}" autocomplete="off"${dis}>`; break;
+    case 'topic': input=`<input${nm} list="dr_topic" value="${esc(v)}" autocomplete="off"${ph}${dis}>`; break;
     case 'ref': input=`<input${nm} list="dr_ref" value="${esc(v)}" autocomplete="off"${ph}${dis}>`; break;
     case 'date': input=`<input${nm} type="${!v||parseISO(v)?'date':'text'}" value="${esc(v)}"${dis}>`; break;
     case 'week': input=`<input${nm} type="date" value="${esc(v)}"${dis}>`; hint='Saved as the Monday of the week you pick.'; break;
@@ -1421,6 +1562,7 @@ function openEditor(k,uid,preset,focusKey){
       <div class="form-grid">${s.fields.map(f=>fieldHTML(k,f,draft[f.k],ro)).join('')}</div>
       <datalist id="dr_mod">${moduleOptions().map(m=>`<option value="${esc(m)}">`).join('')}</datalist>
       <datalist id="dr_ref">${refOptions()}</datalist>
+      ${k==='log'?`<datalist id="dr_topic">${topicOptions()}</datalist>`:''}
       <p class="form-error" id="formError" role="alert"></p>
     </form>
     <footer>${ro?'<button class="btn" data-act="close">Close</button><span class="hint" style="margin:auto 0">You have view access to this sheet.</span>':`
@@ -1463,7 +1605,7 @@ async function deleteRow(){
 
 /* ================= Drawer: settings ================= */
 const GENERAL=[['Project','text',1],['Change request prefix','text'],['Requirement prefix','text'],['Task prefix','text'],['Confluence page prefix','text'],['Daily log prefix','text'],['Due soon window (days)','number'],['Daily target hours','number']];
-const LISTS=[['Modules','Shown as suggestions in the Module field and filters.'],['Task categories','Options for the Category field on weekly tasks.'],['Daily log categories','Options for the Category field in the daily log.']];
+const LISTS=[['Modules','Shown as suggestions in the Module field and filters.'],['Task categories','Options for the Category field on weekly tasks.'],['Daily log categories','Options for the Category field in the daily log.'],['Progress options','Options for Progress in the daily log. These become the Status lines in the weekly report.']];
 function openSettings(){
   const cfg={settings:{...state.settings},statuses:{}};
   for(const k of Object.keys(REG_LABEL)) cfg.statuses[k]=state.statuses[k].map(s=>({...s,orig:s.status}));
@@ -1477,7 +1619,7 @@ function renderSettings(){
     body=`<div class="form-grid">${GENERAL.map(([k,t,full])=>`<div class="field${full?' full':''}"><label for="${fid(k)}">${esc(k)}</label><input id="${fid(k)}" data-cfg="${esc(k)}" type="${t}"${t==='number'?' min="0" step="0.5"':''} value="${esc(S[k]||'')}"></div>`).join('')}</div>
       <p class="hint" style="margin-top:14px">Prefix changes apply to new references only.</p>`;
   } else if(E.tab==='lists'){
-    body=`<div class="form-grid">${LISTS.map(([k,h])=>`<div class="field full"><label for="${fid(k)}">${esc(k)}</label><textarea id="${fid(k)}" data-cfg="${esc(k)}" data-list="1" rows="${k==='Modules'?8:6}">${esc(String(S[k]||'').split(/[;\n]/).map(x=>x.trim()).filter(Boolean).join('\n'))}</textarea><span class="hint">One per line. ${h}</span></div>`).join('')}</div>`;
+    body=`<div class="form-grid">${LISTS.map(([k,h])=>`<div class="field full"><label for="${fid(k)}">${esc(k)}</label><textarea id="${fid(k)}" data-cfg="${esc(k)}" data-list="1" rows="${k==='Modules'?8:6}">${esc(String(S[k]||'').split(/[;,\n]/).map(x=>x.trim()).filter(Boolean).join('\n'))}</textarea><span class="hint">One per line. ${h}</span></div>`).join('')}</div>`;
   } else {
     const list=E.cfg.statuses[E.reg];
     const use={}; state.data[E.reg].forEach(r=>{ use[r.Status]=(use[r.Status]||0)+1; });
@@ -1497,29 +1639,35 @@ function renderSettings(){
     <header><div><h3>Settings</h3><p class="meta">Saved to the Settings and Statuses sheets, shared by everyone.</p></div><button class="icon-btn" data-act="close" aria-label="Close">\u00D7</button></header>
     <form class="body" id="editForm" novalidate>
       <div class="seg">${[['statuses','Statuses'],['lists','Modules and lists'],['general','General']].map(([t,l])=>`<button type="button" class="${E.tab===t?'on':''}" data-stab="${t}">${l}</button>`).join('')}</div>
+      <p class="form-error settings-error" id="formError" role="alert">${esc(E.error||'')}</p>
       ${body}
-      <p class="form-error" id="formError" role="alert"></p>
     </form>
     <footer><button class="btn primary" data-act="save-settings">Save settings</button><button class="btn" data-act="close">Cancel</button></footer>`;
   $('#drawer').setAttribute('aria-label','Settings');
 }
+function settingsProblem(E,tab,reg,msg){ E.tab=tab; if(reg) E.reg=reg; E.error=msg; renderSettings(); $('#drawer .body').scrollTop=0; }
 async function saveSettings(){
-  const cfg=state.editing.cfg, list=[];
+  const E=state.editing, cfg=E.cfg, list=[];
   for(const [k,label] of Object.entries(REG_LABEL)){
+    cfg.statuses[k]=cfg.statuses[k].filter(s=>s.status.trim()||s.orig);
     const seen=new Set();
     for(const s of cfg.statuses[k]){
       const n=s.status.trim();
-      if(!n){ $('#formError').textContent=`Every ${label.toLowerCase()} status needs a name.`; return; }
-      if(seen.has(n.toLowerCase())){ $('#formError').textContent=`"${n}" appears twice in ${label.toLowerCase()}.`; return; }
+      if(!n) return settingsProblem(E,'statuses',k,`A ${label.toLowerCase()} status has no name. Type a name or remove that row.`);
+      if(seen.has(n.toLowerCase())) return settingsProblem(E,'statuses',k,`"${n}" appears twice in ${label.toLowerCase()}. Rename or remove one of them.`);
       seen.add(n.toLowerCase()); list.push({register:label,status:n,colour:s.colour,type:s.type,orig:s.orig||''});
     }
-    if(!cfg.statuses[k].length){ $('#formError').textContent=`${label} needs at least one status.`; return; }
+    if(!cfg.statuses[k].length) return settingsProblem(E,'statuses',k,`${label} needs at least one status.`);
   }
+  const wanted={}; LISTS.forEach(([k])=>{ wanted[k]=String(cfg.settings[k]||'').split(/[;,\n]/).map(x=>x.trim()).filter(Boolean).join('; '); cfg.settings[k]=wanted[k]; });
   const btn=$('[data-act="save-settings"]'); btn.disabled=true; btn.textContent='Saving\u2026';
   try{
     const res=await guarded(()=>api('saveConfig',cfg.settings,list));
-    applyAll(res); closeDrawer(); renderAll(); toast('Saved settings');
-  }catch(e){ $('#formError').textContent=errMsg(e); btn.disabled=false; btn.textContent='Save settings'; }
+    applyAll(res);
+    const lost=LISTS.map(([k])=>k).filter(k=>listOf(k).join('; ')!==wanted[k]);
+    closeDrawer(); renderAll();
+    toast(lost.length?`Saved, but ${lost.join(' and ')} came back different from the sheet. Open the Settings tab of the Google Sheet to check it.`:'Saved settings');
+  }catch(e){ E.error=errMsg(e); btn.disabled=false; btn.textContent='Save settings'; const el=$('#formError'); el.textContent=E.error; $('#drawer .body').scrollTop=0; toast(E.error); }
 }
 
 /* ================= Actions ================= */
@@ -1558,6 +1706,7 @@ document.addEventListener('click',e=>{
   const sEl=state.editing&&state.editing.settings?t.closest('[data-stab],[data-sreg],[data-smove],[data-sdel],[data-sadd]'):null;
   if(sEl){
     const E=state.editing, list=E.cfg.statuses[E.reg];
+    E.error='';
     if(sEl.dataset.stab) E.tab=sEl.dataset.stab;
     else if(sEl.dataset.sreg) E.reg=sEl.dataset.sreg;
     else if(sEl.dataset.smove){ const [i,d]=sEl.dataset.smove.split(':').map(Number); const j=i+d; [list[i],list[j]]=[list[j],list[i]]; }
@@ -1574,9 +1723,10 @@ document.addEventListener('click',e=>{
     switch(act){
       case 'refresh': if(!$('#drawer').classList.contains('open')) load(false); break;
       case 'preview': enterApp('preview'); break;
-      case 'signin': doSignIn(); break;
+      case 'signin': doSignIn(false); break;
+      case 'signin-other': doSignIn(true); break;
       case 'connect': doConnect(); break;
-      case 'resignin': signIn().then(()=>{ state.needSignin=false; renderTop(); load(true); }).catch(err=>toast(errMsg(err))); break;
+      case 'resignin': signIn(false).then(()=>{ state.needSignin=false; renderTop(); load(true); }).catch(err=>toast(errMsg(err))); break;
       case 'copy-link': copyTeamLink(); break;
       case 'switch-sheet': gate('pick'); break;
       case 'sign-out': signOut(); break;
@@ -1602,6 +1752,8 @@ document.addEventListener('click',e=>{
         state.reportWeek=act==='rw-this'?thisWeek():addISO(state.reportWeek,act==='rw-prev'?-7:7); state.reportDraft=null; renderReport(); break;
       case 'save-report': saveReportNotes(); break;
       case 'copy-report': copyReport(); break;
+      case 'ai-prompt': openPrompt(); break;
+      case 'copy-prompt': copyPrompt(); break;
       case 'print': window.print(); break;
       case 'plan-fill': fillPlan(); break;
     }
@@ -1625,8 +1777,9 @@ document.addEventListener('click',e=>{
 document.addEventListener('input',e=>{
   const t=e.target;
   if(t.dataset.f!=null){ const v=state.filters[state.view]; v[t.dataset.f]=t.type==='checkbox'?t.checked:t.value; renderTable(); return; }
+  if(t.hasAttribute&&t.hasAttribute('data-author')){ try{ localStorage.setItem('ba_author',t.value.trim()); }catch(e){} refreshDoc(); return; }
   if(t.dataset.rn){ const d=ensureDraft(); d[t.dataset.rn]=t.value; d.dirty=true; refreshDoc(); return; }
-  if(t.dataset.cfg){ state.editing.cfg.settings[t.dataset.cfg]=t.dataset.list?t.value.split('\n').map(x=>x.trim()).filter(Boolean).join('; '):t.value.trim(); return; }
+  if(t.dataset.cfg){ state.editing.cfg.settings[t.dataset.cfg]=t.dataset.list?t.value.split(/[;,\n]/).map(x=>x.trim()).filter(Boolean).join('; '):t.value.trim(); return; }
   if(t.dataset.si!=null){ const E=state.editing; E.cfg.statuses[E.reg][+t.dataset.si][t.dataset.sf]=t.value; if(t.tagName==='SELECT') renderSettings(); return; }
 });
 document.addEventListener('change',e=>{
@@ -1635,14 +1788,15 @@ document.addEventListener('change',e=>{
     if(state.view==='report'&&state.reportDraft&&state.reportDraft.dirty&&!confirm('Your report notes are not saved. Switch anyway?')){ t.value=state.person; return; }
     state.person=t.value; state.reportDraft=null; renderSide(); renderContent(); return;
   }
-  if(t.id==='qa_ref'&&t.value&&!$('#qa_mod').value){ $('#qa_mod').value=fillModuleFromRef(t.value); }
+  if(t.id==='qa_ref'&&t.value){ if(!$('#qa_mod').value) $('#qa_mod').value=fillModuleFromRef(t.value); const rr=refRecord(t.value); if(rr&&!$('#qa_topic').value) $('#qa_topic').value=titleOf(rr.k,rr.r); }
+  if(t.id==='qa_topic'&&t.value){ const last=lastForTopic(t.value); if(last){ if(!$('#qa_mod').value&&last.Module) $('#qa_mod').value=last.Module; if(last['Linked Ref']&&!$('#qa_ref').value) $('#qa_ref').value=last['Linked Ref']; } }
   if(t.id===fid('Linked Ref')){ const m=$('#'+fid('Module')); if(m&&!m.value) m.value=fillModuleFromRef(t.value); }
 });
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'&&$('#drawer').classList.contains('open')){ closeDrawer(); return; }
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){
     e.preventDefault();
-    if(state.editing&&state.editing.settings) saveSettings(); else if(state.editing&&can()) saveRow(); else if(state.view==='report'&&can()) saveReportNotes();
+    if(state.editing&&state.editing.prompt) return; if(state.editing&&state.editing.settings) saveSettings(); else if(state.editing&&can()) saveRow(); else if(state.view==='report'&&can()) saveReportNotes();
     return;
   }
   if(e.key==='Enter'&&e.target.matches('tr.row')){ const [k,uid]=e.target.dataset.open.split(':'); openEditor(k,+uid); return; }
@@ -1682,7 +1836,7 @@ const Mock=(function(){
     settings:{'Project':'ET1240 EPass 2.0','Change request prefix':'CR-','Requirement prefix':'ET1240-REQ-','Task prefix':'TSK-','Confluence page prefix':'CNF-','Daily log prefix':'LOG-',
       'Modules':'Passport Services; Origin ID (OID); eGate; PISCES; Watchlist 2.0; Legacy / EPass sync; Payment Gateway; Laissez Passer; Golden ID; General',
       'Task categories':'Documentation; Requirements; Meeting; Review; Follow-up; Testing support; Admin',
-      'Daily log categories':'Requirements analysis; Documentation; Meeting; Stakeholder follow-up; Review; Testing support; Admin','Due soon window (days)':'2','Daily target hours':'8'},
+      'Daily log categories':'Requirements analysis; Documentation; Meeting; Stakeholder follow-up; Review; Testing support; Admin','Progress options':'In progress; Completed; Submitted and under review; On hold; Pending confirmation','Due soon window (days)':'2','Daily target hours':'8'},
     statuses:[['Change requests','On hold','Amber','Open'],['Change requests','Awaiting feasibility','Amber','Open'],['Change requests','Awaiting ICS decision','Amber','Open'],['Change requests','Approved, not scheduled','Teal','Open'],['Change requests','Scheduled','Teal','Open'],['Change requests','Implemented','Green','Done'],['Change requests','Rejected','Grey','Closed'],
       ['Requirements','Open','Teal','Open'],['Requirements','In analysis','Teal','Open'],['Requirements','Awaiting ICS confirmation','Amber','Open'],['Requirements','Deferred','Amber','Open'],['Requirements','Confirmed','Green','Done'],['Requirements','Closed','Grey','Closed'],
       ['Weekly tasks','Not started','Grey','Open'],['Weekly tasks','In progress','Teal','Open'],['Weekly tasks','Blocked','Red','Open'],['Weekly tasks','Done','Green','Done'],['Weekly tasks','Carried over','Grey','Closed'],['Weekly tasks','Cancelled','Grey','Closed']]
@@ -1715,13 +1869,13 @@ const Mock=(function(){
     reports:[]
   };
   let n=1; const L=(day,act,mod,cat,ref,h,by,extra)=>DB.data.log.push({'Log ID':'LOG-'+String(n++).padStart(4,'0'),'Date':day,'Activity':act,'Module':mod,'Category':cat,'Linked Ref':ref,'Hours':String(h),'Logged By':by||me,'Record Updated':st(0,100-n),'Updated By':by||me,...(extra||{})});
-  L(wd(0),'Walked ICS through OID reissuance edge cases','Origin ID (OID)','Stakeholder follow-up','CR-01',2.5,me,{'Outcome':'Agreed to escalate matching rule'});
-  L(wd(0),'Drafted Watchlist 2.0 scoping minutes','Watchlist 2.0','Documentation','TSK-002',1.5);
-  L(wd(0),'Reviewed Golden ID validity options','Golden ID','Requirements analysis','ET1240-REQ-001',3);
-  L(wd(1),'Legacy / EPass sync meeting','Legacy / EPass sync','Meeting','',2,other);
-  L(wd(1),'Wrote problem statements for reservation expiry','Passport Services','Requirements analysis','CR-04',4,me,{'Blockers':'Waiting for gateway logs from vendor'});
-  L(wd(2),'FRS OID section rewrite','Origin ID (OID)','Documentation','TSK-003',5);
-  L(wd(2),'Payment gateway walkthrough with finance','Payment Gateway','Meeting','CR-03',1.5);
+  L(wd(0),'Delivered the demonstration to ICS foreign service staff on work in progress','General','Meeting','',2.5,me,{'Topic':'Demonstration for ICS Foreign Service Staff','Progress':'Completed','Outcome':'Feedback captured for follow-up','Next Step':'Hold a secondary demonstration covering the points raised'});
+  L(wd(0),'Confirmed open points on embassy application flow, documents and fees with ICS','Origin ID (OID)','Stakeholder follow-up','CR-01',3,me,{'Topic':'Completion of the Origin ID Requirements for Embassies','Progress':'In progress'});
+  L(wd(1),'Consolidated confirmed OID embassy requirements into the requirement document','Origin ID (OID)','Documentation','',3,me,{'Topic':'Completion of the Origin ID Requirements for Embassies','Progress':'Completed','Outcome':'Document finalised for sign-off'});
+  L(wd(1),'Legacy / EPass sync meeting','Legacy / EPass sync','Meeting','',2,other,{'Topic':'Legacy / EPass Synchronization'});
+  L(wd(1),'Took up the Hajj service urgent processing requirement','Passport Services','Requirements analysis','',2,me,{'Topic':'Hajj Service Inclusion as an Urgent Service','Progress':'In progress','Next Step':'Confirm processing timeline and workflow with ICS','Blockers':'Separate ARN format for Hajj applications not yet confirmed'});
+  L(wd(2),'Final review of Golden ID requirements and submission for internal and client review','Golden ID','Review','ET1240-REQ-001',4,me,{'Topic':'Golden ID Requirement Final Review and Submission','Progress':'Submitted and under review'});
+  L(wd(2),'Added new Addis Ababa branches and configured quotas on the portal','Passport Services','Admin','',1.5,me,{'Topic':'Addis Ababa New Branch Addition and Quota Configuration','Progress':'Completed','Outcome':'Configuration validated against branch reference data'});
   DB.data.log=DB.data.log.filter(r=>r.Date<=t);
   const idf={cr:'CR Ref',req:'Ref No',task:'Task ID',page:'Page Ref',log:'Log ID'};
   const pre={cr:['Change request prefix',2],req:['Requirement prefix',3],task:['Task prefix',3],page:['Confluence page prefix',3],log:['Daily log prefix',4]};
@@ -1764,6 +1918,7 @@ drawGuilloche();
   if(fromUrl){ try{ localStorage.setItem('ba_sheet',fromUrl); }catch(e){} }
   if(params.has('preview')){ enterApp('preview'); return; }
   if(!CONFIG.CLIENT_ID){ gate('setup'); return; }
+  if(restoreAuth()){ if(G.id) enterApp('sheets'); else gate('pick'); return; }
   gate('signin');
 })();
 })();
