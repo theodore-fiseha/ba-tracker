@@ -2,12 +2,23 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<!-- ============================ SETTINGS ============================
+     Paste your Google OAuth client ID (ends in .apps.googleusercontent.com)
+     between the quotes in content="" on the ba-client-id line below.
+     ba-idle-minutes: lock the tracker after this many idle minutes (0 = off).
+     Do not change anything else in this file: the security check below only
+     allows the exact code that ships with it.
+     ================================================================== -->
+<meta name="ba-client-id" content="">
+<meta name="ba-idle-minutes" content="30">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-nNTy5zyhN7Kq2ALmZyCCQqdLSHuWA+MbugLfTzkQauo=' https://accounts.google.com/gsi/client; connect-src https://sheets.googleapis.com https://www.googleapis.com https://oauth2.googleapis.com https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style; font-src https://fonts.gstatic.com; img-src 'self' data:; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta name="referrer" content="strict-origin">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ET1240 BA Tracker</title>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
 :root{
   --paper:#F3F5F1; --surface:#FFFFFF; --ink:#16202A; --ink-2:#4B5663; --ink-3:#7A8490;
@@ -202,6 +213,8 @@ tr.row:focus-visible{outline:2px solid var(--teal);outline-offset:-2px}
 .quick-grid.r2{grid-template-columns:repeat(4,minmax(120px,1fr)) 80px auto}
 .topic{display:block;font-size:12.5px;font-weight:600;color:var(--teal);margin-bottom:1px}
 .doc .kc-h{margin:14px 0 4px;font-weight:600}
+.jira-copy{display:inline-flex;gap:6px;margin-left:auto}
+@media (max-width:900px){.jira-copy{margin-left:0}}
 .prompt-box{width:100%;height:calc(100vh - 230px);min-height:320px;font-family:var(--mono);font-size:12.5px;line-height:1.5;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);resize:vertical}
 .quick-grid label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-2);margin-bottom:4px}
 .quick-grid .inp{width:100%}
@@ -263,6 +276,9 @@ tr.row:focus-visible{outline:2px solid var(--teal);outline-offset:-2px}
 .st-head{display:grid;grid-template-columns:24px minmax(0,1fr) 130px 104px 34px;gap:8px;font-size:12.5px;font-weight:600;color:var(--ink-3);padding-bottom:4px;border-bottom:1px solid var(--line)}
 .st-col{display:flex;align-items:center;gap:6px}.st-col .sw{flex:none;margin:0;border-radius:50%;width:11px;height:11px}
 
+.blocked-note{max-width:620px;margin:0 auto;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:22px 26px;visibility:hidden;opacity:0;animation:showlate .3s 6s forwards}
+.blocked-note h3{margin:0 0 6px}
+@keyframes showlate{to{visibility:visible;opacity:1}}
 .loading{display:flex;align-items:center;gap:12px;color:var(--ink-2);padding:60px 0;justify-content:center}
 .spin{width:18px;height:18px;border:2px solid var(--line);border-top-color:var(--teal);border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -331,7 +347,7 @@ body.gate .shell{grid-template-columns:1fr}
       </div>
     </header>
     <div id="banner"></div>
-    <main id="content"><div class="loading"><span class="spin"></span>Loading the tracker</div></main>
+    <main id="content"><div class="loading"><span class="spin"></span>Loading the tracker</div><div class="blocked-note"><h3>The tracker couldn’t start</h3><p>The browser’s security check stopped the page’s code from running. This happens when anything other than the client ID was changed in index.html, including spaces or line breaks. Paste the original file into GitHub again, change only the <code>ba-client-id</code> line, and commit.</p></div></main>
   </div>
 </div>
 <div class="scrim" id="scrim" data-act="close"></div>
@@ -339,16 +355,10 @@ body.gate .shell{grid-template-columns:1fr}
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
-/* ================= Your settings =================
-   CLIENT_ID: the OAuth client ID from Google Cloud (ends in .apps.googleusercontent.com).
-   SHEET_URL: optional. The tracker sheet link, so nobody has to paste it. */
-const CONFIG = {
-  CLIENT_ID: '673710254879-a8n9gqctgj3ojeuathhh7ok3fj65cepk.apps.googleusercontent.com',
-  SHEET_URL: 'https://docs.google.com/spreadsheets/d/1M66cQlFwvCtYzOQUUbx64VbEEDq48NL6CaYIv_jFS8k/edit?usp=sharing'
-};
-  
 (function(){
 'use strict';
+const metaSetting=n=>{ const m=document.querySelector('meta[name="'+n+'"]'); return m?String(m.content||'').trim():''; };
+const CONFIG={CLIENT_ID:metaSetting('ba-client-id'),SHEET_URL:'',IDLE_MINUTES:metaSetting('ba-idle-minutes')===''?30:Number(metaSetting('ba-idle-minutes'))};
 
 /* ================= Schema ================= */
 const REG_LABEL = {cr:'Change requests', req:'Requirements', task:'Weekly tasks'};
@@ -486,7 +496,7 @@ const addISO=(s,n)=>iso(addDays(parseISO(s),n));
 const thisWeek=()=>iso(mondayOf(new Date()));
 const weekOf=s=>iso(mondayOf(parseISO(s)));
 const inWeek=(d,w)=>!!parseISO(d) && d.slice(0,10)>=w && d.slice(0,10)<=addISO(w,6);
-function fmtDate(s,opt){ const d=parseISO(s); if(!d) return s||''; const o=opt==='short'?{day:'numeric',month:'short'}:opt==='day'?{weekday:'long',day:'numeric',month:'short'}:opt==='long'?{weekday:'long',day:'numeric',month:'long',year:'numeric'}:{day:'numeric',month:'short',year:'numeric'}; return d.toLocaleDateString('en-GB',o); }
+function fmtDate(s,opt){ const d=parseISO(s); if(!d) return String(s||'').replace(/[<>&"'`]/g,''); const o=opt==='short'?{day:'numeric',month:'short'}:opt==='day'?{weekday:'long',day:'numeric',month:'short'}:opt==='long'?{weekday:'long',day:'numeric',month:'long',year:'numeric'}:{day:'numeric',month:'short',year:'numeric'}; return d.toLocaleDateString('en-GB',o); }
 const num=(v,d)=>{ const n=parseFloat(v); return isNaN(n)?d:n; };
 const fmtH=h=>(Math.round(h*100)/100)+'h';
 const listOf=key=>String(state.settings[key]||'').split(/[;,\n]/).map(s=>s.trim()).filter(Boolean);
@@ -520,7 +530,7 @@ function dueLabel(d){
   return {text:fmtDate(d,'short'),tone:'muted'};
 }
 function whenText(stamp){
-  const d=String(stamp||'').slice(0,10), t=String(stamp||'').slice(11,16);
+  const d=String(stamp||'').slice(0,10), t=String(stamp||'').slice(11,16).replace(/[^0-9:]/g,'');
   if(d===today()) return 'today at '+t;
   if(d===addISO(today(),-1)) return 'yesterday at '+t;
   return fmtDate(d,'short')+(t?' at '+t:'');
@@ -590,10 +600,10 @@ async function guarded(fn){
 const SCOPES='https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.email';
 const auth={token:null,exp:0,email:''};
 const SCOPE_MSG='Google didn\u2019t give the tracker permission to use your Google Sheets. Sign in again, and on Google\u2019s permission screen tick the box for \u201cSee, edit, create and delete all your Google Sheets spreadsheets\u201d.';
-function saveAuth(){ try{ localStorage.setItem('ba_auth',JSON.stringify({token:auth.token,exp:auth.exp,email:auth.email})); }catch(e){} }
-function clearAuth(){ auth.token=null; auth.exp=0; try{ localStorage.removeItem('ba_auth'); }catch(e){} }
+function saveAuth(){ try{ sessionStorage.setItem('ba_auth',JSON.stringify({token:auth.token,exp:auth.exp,email:auth.email})); }catch(e){} }
+function clearAuth(){ auth.token=null; auth.exp=0; try{ sessionStorage.removeItem('ba_auth'); localStorage.removeItem('ba_auth'); }catch(e){} }
 function restoreAuth(){
-  try{ const a=JSON.parse(localStorage.getItem('ba_auth')||'null'); if(a&&a.token&&a.exp>Date.now()+120000){ auth.token=a.token; auth.exp=a.exp; auth.email=a.email||''; return true; } }catch(e){}
+  try{ const a=JSON.parse(sessionStorage.getItem('ba_auth')||'null'); if(a&&a.token&&a.exp>Date.now()+120000){ auth.token=a.token; auth.exp=a.exp; auth.email=a.email||''; return true; } }catch(e){}
   return false;
 }
 const savedHint=()=>{ try{ return localStorage.getItem('ba_hint')||''; }catch(e){ return ''; } };
@@ -621,8 +631,21 @@ function signIn(chooseAccount){
 function signOut(){
   try{ if(auth.token) google.accounts.oauth2.revoke(auth.token,()=>{}); }catch(e){}
   clearAuth(); auth.email=''; G.canEdit=null; try{ localStorage.removeItem('ba_hint'); }catch(e){}
-  state.loadedOnce=false; state.person=null; state.chooseAccount=true; gate('signin');
+  state.loadedOnce=false; state.person=null; state.chooseAccount=true; wipeData(); gate('signin');
 }
+function wipeData(){ for(const k in state.data) state.data[k]=[]; state.reports=[]; state.reportDraft=null; closeDrawer(); }
+/* Auto-lock after a period without activity */
+const IDLE_MS=Math.max(0,Number(CONFIG.IDLE_MINUTES)||0)*60000;
+let lastActive=Date.now();
+['click','keydown','mousemove','touchstart','scroll'].forEach(ev=>document.addEventListener(ev,()=>{ lastActive=Date.now(); },{passive:true,capture:true}));
+function checkIdle(){
+  if(!IDLE_MS||state.mode!=='sheets'||!auth.token||Date.now()-lastActive<IDLE_MS) return;
+  const draft=state.reportDraft&&state.reportDraft.dirty?state.reportDraft:null;
+  clearAuth(); wipeData(); state.reportDraft=draft; state.loadedOnce=false;
+  gate('signin',`The tracker locked itself after ${CONFIG.IDLE_MINUTES} minutes without activity. Sign in to continue.`);
+}
+setInterval(checkIdle,15000);
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') checkIdle(); });
 
 /* ================= Google Sheets API ================= */
 const REG={
@@ -897,7 +920,7 @@ function gate(phase,error){
   const err=error?`<p class="err" role="alert">${esc(error)}</p>`:'';
   let body='';
   if(phase==='setup') body=`<h2>One setting is missing</h2>
-    <p>This page needs your Google OAuth client ID before anyone can sign in. Open <b>index.html</b>, find <code>CLIENT_ID</code> near the top of the script, paste your client ID between the quotes, and upload the file again.</p>
+    <p>This page needs your Google OAuth client ID before anyone can sign in. Open <b>index.html</b> on GitHub, find <code>ba-client-id</code> near the top, paste your client ID between the quotes after <code>content=</code>, and commit the change.</p>
     <p>Until then you can look around with sample data.</p>
     <div class="row"><button class="btn primary" data-act="preview">Open preview with sample data</button></div>`;
   else if(phase==='signin'){ const h=state.chooseAccount?'':savedHint(); body=`<h2>${h?'Welcome back':'Sign in to open the tracker'}</h2>
@@ -1231,6 +1254,7 @@ function renderLog(){
       </div>
       <button class="btn sm" data-act="day-today"${day===today()?' disabled':''}>Today</button>
       ${personSelect()}
+      <span class="jira-copy"><select class="inp" id="jiraScope" aria-label="Which entries to include"><option value="day"${state.jiraScope!=='week'?' selected':''}>This day</option><option value="week"${state.jiraScope==='week'?' selected':''}>This week</option></select><button class="btn primary" data-act="jira-prompt">Copy Jira prompt</button></span>
     </div>
     ${can()?`<div class="quick">
       <h3>Add to ${fmtDate(day,'day')}</h3>
@@ -1408,6 +1432,67 @@ function buildPrompt(D,draft){
   sec('Plan for next week (my notes):',noteLines(draft['Plan for Next Week']),l=>l);
   L.push('','Write the complete report now, starting with "1. Core Activities".');
   return L.filter((l,i,a)=>!(l===''&&a[i-1]==='')).join('\n');
+}
+/* ================= Jira prompt from the daily log ================= */
+function jiraTime(h){
+  const mins=Math.round(num(h,0)*60); if(!mins) return '';
+  const hh=Math.floor(mins/60), mm=mins%60;
+  return [hh?hh+'h':'',mm?mm+'m':''].filter(Boolean).join(' ');
+}
+function buildJiraPrompt(scope){
+  const day=state.day, week=weekOf(day);
+  const days=scope==='week'?[...Array(7)].map((_,i)=>addISO(week,i)):[day];
+  const sortRows=rows=>rows.slice().sort((a,b)=>String(a['Log ID']).localeCompare(String(b['Log ID']),undefined,{numeric:true}));
+  const groups=days.map(d=>({d,rows:sortRows(logsFor(r=>r.Date===d))})).filter(g=>g.rows.length);
+  if(!groups.length) return '';
+  const who=state.person==='all'?'the team':shortName(state.person||state.user.email);
+  const L=[
+`Turn my daily work log below into Jira work log entries. Keep every entry clear, simple and short.`,
+'',
+'For each entry, write:',
+'Issue: the linked reference exactly as written, or "No issue linked" if there is none.',
+'Summary: one line of no more than 10 words, starting with a past-tense verb (for example "Reviewed Golden ID validity rules with ICS").',
+'Description: one or two short sentences saying what was done and the result. Plain language, no filler, no repeating the summary.',
+'Time spent: in Jira format (for example 1h 30m), or "Not logged" if no time is given.',
+'Add "Blocker:" or "Next:" lines only when the log gives them, one short sentence each.',
+'',
+'Rules:',
+'- Use only what is in the log. Do not add details, people, dates or outcomes that are not there.',
+'- If two entries on the same day share the same topic and linked issue, merge them into one entry and add the time together.',
+'- Keep system and module names exactly as written, for example EPass 2.0, eGate, PISCES, Golden ID, OID.',
+'- Plain text only: no tables, no bold, no headings other than the day lines. Separate entries with a blank line.',
+`- ${groups.length>1?'Start each day with a line giving the day and date, and end with a total time for each day and for the week.':'End with one line giving the total time for the day.'}`,
+'',
+`DAILY LOG for ${who}`
+  ];
+  groups.forEach(g=>{
+    L.push('',fmtDate(g.d,'long'));
+    g.rows.forEach((r,i)=>{
+      const meta=[r.Topic&&'Topic: '+r.Topic, r['Linked Ref']&&'Linked: '+r['Linked Ref'], r.Module&&'Module: '+r.Module, r.Category&&'Category: '+r.Category, 'Time: '+(jiraTime(r.Hours)||'not logged'), r.Progress&&'Progress: '+r.Progress].filter(Boolean).join(' | ');
+      L.push(`${i+1}. ${meta}`,`   Did: ${sentence(r.Activity)}`);
+      if(r.Outcome) L.push(`   Outcome: ${sentence(r.Outcome)}`);
+      if(r['Next Step']) L.push(`   Next step: ${sentence(r['Next Step'])}`);
+      if(r.Blockers) L.push(`   Blocker: ${sentence(r.Blockers)}`);
+    });
+  });
+  return L.join('\n');
+}
+async function copyJiraPrompt(){
+  const scope=state.jiraScope==='week'?'week':'day';
+  const text=buildJiraPrompt(scope);
+  if(!text){ toast(scope==='week'?'Nothing logged this week yet.':`Nothing logged for ${fmtDate(state.day,'day')} yet.`); return; }
+  try{ await navigator.clipboard.writeText(text); toast('Jira prompt copied. Paste it into Claude to get your Jira entries.'); }
+  catch(e){ openTextDrawer('Jira prompt','Your browser blocked automatic copying. Copy the text below.',text); }
+}
+function openTextDrawer(title,meta,text){
+  state.editing={prompt:true};
+  $('#drawer').innerHTML=`
+    <header><div><h3>${esc(title)}</h3><p class="meta">${esc(meta)}</p></div><button class="icon-btn" data-act="close" aria-label="Close">\u00D7</button></header>
+    <div class="body"><textarea id="promptText" class="prompt-box" spellcheck="false" aria-label="${esc(title)}">${esc(text)}</textarea></div>
+    <footer><button class="btn primary" data-act="copy-prompt">Copy</button><button class="btn" data-act="close">Close</button></footer>`;
+  $('#drawer').setAttribute('aria-label',title);
+  openDrawer('#promptText');
+  $('#promptText').select();
 }
 function openPrompt(){
   const text=buildPrompt(reportData(),ensureDraft());
@@ -1754,6 +1839,7 @@ document.addEventListener('click',e=>{
       case 'copy-report': copyReport(); break;
       case 'ai-prompt': openPrompt(); break;
       case 'copy-prompt': copyPrompt(); break;
+      case 'jira-prompt': copyJiraPrompt(); break;
       case 'print': window.print(); break;
       case 'plan-fill': fillPlan(); break;
     }
@@ -1784,6 +1870,7 @@ document.addEventListener('input',e=>{
 });
 document.addEventListener('change',e=>{
   const t=e.target;
+  if(t.id==='jiraScope'){ state.jiraScope=t.value; return; }
   if(t.matches('[data-person]')){
     if(state.view==='report'&&state.reportDraft&&state.reportDraft.dirty&&!confirm('Your report notes are not saved. Switch anyway?')){ t.value=state.person; return; }
     state.person=t.value; state.reportDraft=null; renderSide(); renderContent(); return;
@@ -1908,6 +1995,7 @@ const Mock=(function(){
 })();
 
 /* ================= Start ================= */
+if(window.top!==window.self){ document.documentElement.style.display='none'; try{ window.top.location.href=window.location.href; }catch(e){} return; }
 state.week=thisWeek(); state.day=today(); state.reportWeek=thisWeek();
 drawGuilloche();
 (function start(){
@@ -1916,6 +2004,7 @@ drawGuilloche();
   const fromUrl=sheetIdFrom(params.get('sheet')||'');
   G.id=fromUrl||stored||sheetIdFrom(CONFIG.SHEET_URL);
   if(fromUrl){ try{ localStorage.setItem('ba_sheet',fromUrl); }catch(e){} }
+  if(params.has('sheet')){ params.delete('sheet'); history.replaceState(null,'',location.pathname+(params.toString()?'?'+params:'')); }
   if(params.has('preview')){ enterApp('preview'); return; }
   if(!CONFIG.CLIENT_ID){ gate('setup'); return; }
   if(restoreAuth()){ if(G.id) enterApp('sheets'); else gate('pick'); return; }
@@ -1923,5 +2012,6 @@ drawGuilloche();
 })();
 })();
 </script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 </body>
 </html>
